@@ -1,0 +1,577 @@
+import type {
+  CampaignView,
+  Counts,
+  CampaignEvent,
+  Message,
+  NetworkEntry,
+  PipelineRow,
+  UserMemory,
+  Vendor,
+  VendorMetrics,
+} from "../lib/types";
+
+const now = Date.now();
+const MIN = 60_000;
+const HOUR = 3_600_000;
+
+export const fixtureCampaignView: CampaignView = {
+  campaign: {
+    _id: "camp_demo",
+    title: "Wedding Photographer — Mumbai",
+    category: "photographer",
+    description:
+      "Wedding photographer in Mumbai on October 18. Eight hours, candid photography and highlight video. Try to stay under ₹40,000.",
+    status: "active",
+    location: "Mumbai",
+    currency: "INR",
+    targetBudget: 32000,
+    hardBudget: 40000,
+    spec: {
+      category: "photographer",
+      location: "Mumbai",
+      targetDate: "2026-10-18",
+      budgetType: "package",
+      targetBudget: 32000,
+      hardBudget: 40000,
+      currency: "INR",
+      requirements: [
+        { id: "req-0", label: "Available October 18", kind: "required" },
+        { id: "req-1", label: "8 hours coverage", kind: "required" },
+        { id: "req-2", label: "Edited photos", kind: "required" },
+        { id: "req-3", label: "Highlight video", kind: "required" },
+        { id: "req-4", label: "Drone footage", kind: "preferred" },
+      ],
+      negotiable: ["raw footage", "album pages", "delivery timeline"],
+    },
+    permissions: {
+      outreach: "auto",
+      clarification: "auto",
+      negotiation: "auto",
+      selection: "ask",
+    },
+    createdAt: now - 24 * HOUR,
+    updatedAt: now - 2 * MIN,
+  },
+  mailboxEmail: "photographer-7fx3@agentmail.to",
+  counts: {
+    discovered: 2,
+    qualified: 2,
+    eliminated: 1,
+    contacted: 1,
+    replied: 1,
+    negotiating: 2,
+    finalist: 1,
+    selected: 0,
+    discoveredTotal: 10,
+  } as Counts,
+  approvals: [
+    {
+      _id: "approval-demo-1",
+      kind: "select_finalist",
+      status: "pending",
+      createdAt: now - 5 * MIN,
+      campaignVendorId: "cv_samarth",
+    },
+  ],
+  bestOffer: {
+    vendorName: "Samarth Weddings",
+    offer: {
+      _id: "o_samarth",
+      revisionNumber: 2,
+      currency: "INR",
+      lineItems: [
+        {
+          label: "Wedding package (negotiated)",
+          quantity: 1,
+          unitPrice: 33000,
+          totalPrice: 33000,
+          required: true,
+          included: true,
+          isAddon: false,
+        },
+      ],
+      subtotal: 33000,
+      taxesIncluded: true,
+      travelIncluded: true,
+      estimatedTotal: 33000,
+      assumptions: [],
+      coverageHours: 8,
+      deliverables: ["edited photos", "highlight film"],
+      deliveryTimelineDays: 30,
+      completenessScore: 1,
+      missingFields: [],
+      status: "active",
+    },
+  },
+};
+
+function vendor(
+  _id: string,
+  name: string,
+  extra: Partial<Vendor> = {},
+): Vendor {
+  return {
+    _id,
+    name,
+    category: "photographer",
+    locations: ["Mumbai"],
+    services: ["wedding photography", "candid photography"],
+    aliases: [],
+    sourceUrls: [],
+    confidence: 0.92,
+    isDemoVendor: true,
+    ...extra,
+  };
+}
+
+export const fixturePipeline: PipelineRow[] = [
+  {
+    cv: {
+      _id: "cv_pixel",
+      stage: "negotiating",
+      qualificationScore: 90,
+      offerScore: 93.2,
+      availability: true,
+      contactedAt: now - 20 * HOUR,
+      repliedAt: now - 14 * MIN,
+      satisfiedRequirements: ["req-0", "req-1", "req-2", "req-3"],
+      missingRequirements: [],
+    },
+    vendor: vendor("v_pixel", "Pixel House", {
+      email: "hello@pixelhouse.studio",
+      services: ["wedding photography", "candid photography", "cinematography"],
+    }),
+    offer: {
+      _id: "o_pixel",
+      revisionNumber: 1,
+      currency: "INR",
+      lineItems: [
+        {
+          label: "Wedding package",
+          quantity: 1,
+          unitPrice: 36000,
+          totalPrice: 36000,
+          required: true,
+          included: true,
+          isAddon: false,
+        },
+      ],
+      subtotal: 36000,
+      taxesIncluded: true,
+      travelIncluded: true,
+      estimatedTotal: 36000,
+      assumptions: [],
+      coverageHours: 8,
+      deliverables: ["edited photos", "highlight film"],
+      deliveryTimelineDays: 21,
+      completenessScore: 1,
+      missingFields: [],
+      status: "active",
+    },
+    thread: {
+      _id: "t_pixel",
+      subject: "RFQ: Wedding Photographer — Mumbai",
+      state: "negotiating",
+      lastMessageAt: now - 14 * MIN,
+    },
+  },
+  {
+    cv: {
+      _id: "cv_samarth",
+      stage: "finalist",
+      qualificationScore: 92,
+      offerScore: 90.8,
+      availability: true,
+      contactedAt: now - 20 * HOUR,
+      repliedAt: now - 19 * MIN,
+      satisfiedRequirements: ["req-0", "req-1", "req-2", "req-3"],
+      missingRequirements: [],
+    },
+    vendor: vendor("v_samarth", "Samarth Weddings", {
+      email: "hello@samarthweddings.in",
+    }),
+    offer: {
+      _id: "o_samarth",
+      revisionNumber: 2,
+      currency: "INR",
+      lineItems: [
+        {
+          label: "Wedding package (negotiated)",
+          quantity: 1,
+          unitPrice: 33000,
+          totalPrice: 33000,
+          required: true,
+          included: true,
+          isAddon: false,
+        },
+      ],
+      subtotal: 33000,
+      taxesIncluded: true,
+      travelIncluded: true,
+      estimatedTotal: 33000,
+      assumptions: [],
+      coverageHours: 8,
+      deliverables: ["edited photos", "highlight film"],
+      deliveryTimelineDays: 30,
+      completenessScore: 1,
+      missingFields: [],
+      status: "active",
+    },
+    firstOffer: {
+      _id: "o_samarth_r1",
+      revisionNumber: 1,
+      currency: "INR",
+      lineItems: [
+        {
+          label: "Wedding package",
+          quantity: 1,
+          unitPrice: 38000,
+          totalPrice: 38000,
+          required: true,
+          included: true,
+          isAddon: false,
+        },
+      ],
+      subtotal: 38000,
+      taxesIncluded: true,
+      travelIncluded: true,
+      estimatedTotal: 38000,
+      assumptions: [],
+      coverageHours: 8,
+      deliverables: ["edited photos", "highlight film"],
+      deliveryTimelineDays: 30,
+      completenessScore: 1,
+      missingFields: [],
+      status: "superseded",
+    },
+    thread: {
+      _id: "t_samarth",
+      subject: "RFQ: Wedding Photographer — Mumbai",
+      state: "finalized",
+      lastMessageAt: now - 19 * MIN,
+    },
+  },
+  {
+    cv: {
+      _id: "cv_stories",
+      stage: "negotiating",
+      qualificationScore: 84,
+      offerScore: 82.5,
+      availability: true,
+      contactedAt: now - 19 * HOUR,
+      repliedAt: now - 44 * MIN,
+      satisfiedRequirements: ["req-0", "req-1", "req-2", "req-3"],
+      missingRequirements: [],
+    },
+    vendor: vendor("v_stories", "Stories Studio", {
+      email: "studio@storiesstudio.com",
+    }),
+    offer: {
+      _id: "o_stories",
+      revisionNumber: 2,
+      currency: "INR",
+      lineItems: [
+        {
+          label: "Wedding package (revised)",
+          quantity: 1,
+          unitPrice: 36000,
+          totalPrice: 36000,
+          required: true,
+          included: true,
+          isAddon: false,
+        },
+      ],
+      subtotal: 36000,
+      taxesIncluded: true,
+      travelIncluded: true,
+      estimatedTotal: 36000,
+      assumptions: [],
+      coverageHours: 8,
+      deliverables: ["edited photos", "highlight film"],
+      deliveryTimelineDays: 25,
+      completenessScore: 1,
+      missingFields: [],
+      status: "active",
+    },
+    firstOffer: {
+      _id: "o_stories_r1",
+      revisionNumber: 1,
+      currency: "INR",
+      lineItems: [
+        {
+          label: "Wedding package",
+          quantity: 1,
+          unitPrice: 42000,
+          totalPrice: 42000,
+          required: true,
+          included: true,
+          isAddon: false,
+        },
+      ],
+      subtotal: 42000,
+      taxesIncluded: true,
+      travelIncluded: true,
+      estimatedTotal: 42000,
+      assumptions: [],
+      coverageHours: 8,
+      deliverables: ["edited photos", "highlight film"],
+      deliveryTimelineDays: 25,
+      completenessScore: 1,
+      missingFields: [],
+      status: "superseded",
+    },
+    thread: {
+      _id: "t_stories",
+      subject: "RFQ: Wedding Photographer — Mumbai",
+      state: "negotiating",
+      lastMessageAt: now - 44 * MIN,
+    },
+  },
+  {
+    cv: {
+      _id: "cv_frame",
+      stage: "replied",
+      qualificationScore: 61,
+      offerScore: 68.5,
+      availability: true,
+      contactedAt: now - 20 * HOUR,
+      repliedAt: now - 3 * HOUR,
+      satisfiedRequirements: ["req-0", "req-1", "req-2"],
+      missingRequirements: ["req-3"],
+    },
+    vendor: vendor("v_frame", "Frame Co", {
+      email: "contact@frameco.in",
+      services: ["photography"],
+    }),
+    offer: {
+      _id: "o_frame",
+      revisionNumber: 1,
+      currency: "INR",
+      lineItems: [
+        {
+          label: "Photography only",
+          quantity: 1,
+          unitPrice: 29000,
+          totalPrice: 29000,
+          required: true,
+          included: true,
+          isAddon: false,
+        },
+      ],
+      subtotal: 29000,
+      taxesIncluded: true,
+      travelIncluded: true,
+      estimatedTotal: 29000,
+      assumptions: [],
+      coverageHours: 8,
+      deliverables: ["edited photos"],
+      completenessScore: 0.66,
+      missingFields: ["highlight video", "delivery timeline"],
+      status: "active",
+    },
+    thread: {
+      _id: "t_frame",
+      subject: "RFQ: Wedding Photographer — Mumbai",
+      state: "needs_clarification",
+      lastMessageAt: now - 3 * HOUR,
+    },
+  },
+  {
+    cv: {
+      _id: "cv_silent",
+      stage: "contacted",
+      qualificationScore: 58,
+      contactedAt: now - 18 * HOUR,
+      satisfiedRequirements: ["req-0", "req-1"],
+      missingRequirements: ["req-2", "req-3"],
+    },
+    vendor: vendor("v_silent", "Silent Lens", {
+      email: "silent@lens.example",
+      demoBehavior: "ghost",
+    }),
+    offer: null,
+    thread: {
+      _id: "t_silent",
+      subject: "RFQ: Wedding Photographer — Mumbai",
+      state: "sent",
+      lastMessageAt: now - 18 * HOUR,
+    },
+  },
+  {
+    cv: {
+      _id: "cv_q1",
+      stage: "qualified",
+      qualificationScore: 74,
+      satisfiedRequirements: ["req-0", "req-1", "req-2"],
+      missingRequirements: ["req-3"],
+    },
+    vendor: vendor("v_q1", "Golden Hour Films", {
+      email: "hello@goldenhour.example",
+      services: ["wedding photography", "videography"],
+    }),
+    offer: null,
+    thread: null,
+  },
+  {
+    cv: {
+      _id: "cv_q2",
+      stage: "qualified",
+      qualificationScore: 69,
+      satisfiedRequirements: ["req-0", "req-1", "req-2", "req-3"],
+      missingRequirements: [],
+    },
+    vendor: vendor("v_q2", "Candid Collective", {
+      email: "team@candidcollective.example",
+      services: ["candid photography"],
+    }),
+    offer: null,
+    thread: null,
+  },
+  {
+    cv: {
+      _id: "cv_d1",
+      stage: "discovered",
+      qualificationScore: 0,
+      satisfiedRequirements: [],
+      missingRequirements: [],
+    },
+    vendor: vendor("v_d1", "Mumbai Snaps", {
+      services: ["photography"],
+    }),
+    offer: null,
+    thread: null,
+  },
+  {
+    cv: {
+      _id: "cv_d2",
+      stage: "discovered",
+      qualificationScore: 0,
+      satisfiedRequirements: [],
+      missingRequirements: [],
+    },
+    vendor: vendor("v_d2", "Lens & Light Studio", {
+      services: ["photography", "videography"],
+    }),
+    offer: null,
+    thread: null,
+  },
+  {
+    cv: {
+      _id: "cv_e1",
+      stage: "eliminated",
+      qualificationScore: 41,
+      eliminationReason: "outside budget (min signal ₹85,000)",
+      satisfiedRequirements: ["req-0"],
+      missingRequirements: ["req-1", "req-2", "req-3"],
+    },
+    vendor: vendor("v_e1", "LuxFrame Studios", {
+      services: ["luxury wedding photography"],
+    }),
+    offer: null,
+    thread: null,
+  },
+];
+
+export const fixtureEvents: CampaignEvent[] = [
+  { type: "negotiation.counter", summary: "Counter sent to Pixel House: ₹33,000 (from ₹36,000)", createdAt: now - 2 * MIN },
+  { type: "message.received", summary: "Pixel House replied", createdAt: now - 14 * MIN },
+  { type: "offer.revised", summary: "Samarth Weddings offer revised: ₹33,000 estimated total", createdAt: now - 19 * MIN },
+  { type: "negotiation.counter", summary: "Counter sent to Samarth Weddings: ₹35,000 (from ₹38,000)", createdAt: now - 35 * MIN },
+  { type: "offer.extracted", summary: "Samarth Weddings offer extracted: ₹38,000 estimated total", createdAt: now - 50 * MIN },
+  { type: "message.received", summary: "Samarth Weddings replied", createdAt: now - 52 * MIN },
+  { type: "clarification.sent", summary: "Follow-up sent to Frame Co asking about: highlight video, delivery timeline", createdAt: now - 2 * HOUR },
+  { type: "offer.extracted", summary: "Frame Co offer extracted: ₹29,000 estimated total", createdAt: now - 3 * HOUR },
+  { type: "outreach.sent", summary: "RFQ sent to Stories Studio", createdAt: now - 19 * HOUR },
+  { type: "vendor.qualified", summary: "Pixel House qualified (score 90)", createdAt: now - 21 * HOUR },
+  { type: "vendor.discovered", summary: "Discovered Pixel House", createdAt: now - 22 * HOUR },
+  { type: "discovery.planned", summary: "Search plan ready: 5 queries", createdAt: now - 23 * HOUR },
+  { type: "campaign.created", summary: "Campaign created", createdAt: now - 24 * HOUR },
+];
+
+export const fixtureMessages: Message[] = [
+  {
+    direction: "outbound",
+    fromAddress: "photographer-7fx3@agentmail.to",
+    subject: "RFQ: Wedding Photographer — Mumbai",
+    bodyText:
+      "Hi Samarth,\n\nI'm looking for wedding photography in Mumbai on October 18.\n\nRequirements:\n- roughly 8 hours of coverage\n- candid + traditional photography\n- short highlight video\n- edited photo delivery\n\nCould you confirm:\n1. availability\n2. complete price including taxes/travel\n3. exact deliverables\n4. expected delivery timeline\n\nOur budget is around ₹32,000, up to ₹40,000 maximum.\n\nThanks.",
+    kind: "rfq",
+    timestamp: now - 20 * HOUR,
+  },
+  {
+    direction: "inbound",
+    fromAddress: "hello@samarthweddings.in",
+    subject: "Re: RFQ: Wedding Photographer — Mumbai",
+    bodyText:
+      "Hi,\n\nThanks for reaching out! Yes, we are available on October 18.\nOur complete package is ₹38,000 including taxes and travel — 8 hours of coverage, edited photos and the highlight film, delivered within 30 days.\n\nLet me know if you'd like to proceed.\n\n— Samarth",
+    kind: "vendor_reply",
+    timestamp: now - 52 * MIN,
+  },
+  {
+    direction: "outbound",
+    fromAddress: "photographer-7fx3@agentmail.to",
+    subject: "Re: RFQ: Wedding Photographer — Mumbai",
+    bodyText:
+      "Hi Samarth,\n\nThank you for the detailed quote. If we keep the same 8-hour coverage, is there any flexibility closer to ₹35,000 all-inclusive?\n\nThanks.",
+    kind: "counteroffer",
+    timestamp: now - 35 * MIN,
+  },
+  {
+    direction: "inbound",
+    fromAddress: "hello@samarthweddings.in",
+    subject: "Re: RFQ: Wedding Photographer — Mumbai",
+    bodyText:
+      "Hi,\n\nWe can do ₹33,000 all-inclusive as a final price. That includes everything discussed — taxes and travel covered.\n\n— Samarth",
+    kind: "vendor_reply",
+    timestamp: now - 19 * MIN,
+  },
+];
+
+export const fixtureVendorProfile: {
+  vendor: Vendor;
+  metrics: VendorMetrics;
+} = {
+  vendor: vendor("v_samarth", "Samarth Weddings", {
+    email: "hello@samarthweddings.in",
+    website: "https://samarthweddings.in",
+    services: ["wedding photography", "candid photography", "highlight films"],
+  }),
+  metrics: {
+    campaignsSeen: 4,
+    timesContacted: 3,
+    replies: 3,
+    medianResponseMs: 21 * MIN,
+    medianInitialQuote: 38000,
+    medianFinalQuote: 33500,
+    typicalDiscountPct: 11.8,
+    timesSelected: 1,
+    userRating: 4.7,
+  },
+};
+
+export const fixtureNetwork: NetworkEntry[] = [
+  { vendor: fixtureVendorProfile.vendor, metrics: fixtureVendorProfile.metrics },
+  {
+    vendor: vendor("v_pixel", "Pixel House", {
+      email: "hello@pixelhouse.studio",
+    }),
+    metrics: {
+      campaignsSeen: 2,
+      timesContacted: 2,
+      replies: 2,
+      medianResponseMs: 14 * MIN,
+      medianInitialQuote: 36000,
+      medianFinalQuote: 33000,
+      typicalDiscountPct: 8.3,
+      timesSelected: 0,
+    },
+  },
+  { vendor: vendor("v_lens", "Lens & Light Studio"), metrics: null },
+];
+
+export const fixtureMemory: UserMemory = {
+  totalSelections: 2,
+  nonCheapestSelections: 1,
+  medianSelectedResponseMs: 21 * MIN,
+  categoryCounts: [{ category: "photographer", count: 2 }],
+};
