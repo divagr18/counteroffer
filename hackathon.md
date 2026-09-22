@@ -231,6 +231,6 @@ token-to-duration mapping and produced speech roughly two and a half times too
 fast. Qwen3-TTS installed cleanly with CUDA and the model downloaded after a
 hung Hugging Face transfer was killed and retried, but the deadline arrived
 first. The video ships silent with its caption file, which was always the
-fallback. `docs/demo/qwen_tts.py` is the closest working path if anyone picks
-this up.
+fallback, and the half-finished generation scripts were removed rather than
+shipped as dead code.
 

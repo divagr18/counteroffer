@@ -157,15 +157,17 @@ const CATERING_VENDORS: DemoVendorSeed[] = [
 /**
  * A vendor that is not one of the scripted personas.
  *
- * It carries a real address and `isDemoVendor: false`, so when the deployment
- * runs with EMAIL_TRANSPORT="live" its RFQ is drafted by the model, delivered
- * by AgentMail, and answered through the Svix-verified webhook. Under the
- * default mock transport nothing is sent and it answers from the persona
- * engine like everyone else.
+ * With `isDemoVendor: false` and EMAIL_TRANSPORT="live", its request for quote
+ * is drafted by the model, delivered by AgentMail, and answered through the
+ * Svix-verified webhook. Under the default mock transport nothing is sent and
+ * it answers from the persona engine like everyone else.
  *
- * Override the address with the LIVE_VENDOR_EMAIL deployment env var.
+ * Set the LIVE_VENDOR_EMAIL deployment variable to a mailbox you control. No
+ * real address is committed here: the placeholder domain is reserved by RFC
+ * 2606 and can never receive mail, so a misconfigured deployment cannot post
+ * to a stranger.
  */
-const LIVE_VENDOR_FALLBACK_EMAIL = "developer@bizdateup.com";
+const LIVE_VENDOR_FALLBACK_EMAIL = "vendor@example.com";
 
 function liveVendorEmail(): string {
   return process.env.LIVE_VENDOR_EMAIL ?? LIVE_VENDOR_FALLBACK_EMAIL;
