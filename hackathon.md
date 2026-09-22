@@ -12,7 +12,7 @@
 - **Auth:** none
 - **AI models:** gpt-5.6-luna
 - **Started:** 2026-09-20T13:59:26Z
-- **Last updated:** 2026-09-21T17:40:21Z
+- **Last updated:** 2026-09-22T18:10:00Z
 
 ## Demo video
 
@@ -210,3 +210,27 @@ Added the README with the buyer workflow, sponsor responsibilities, and Convex
 implementation evidence. Updated the runbook for Convex static hosting and
 clarified that demo email is simulated to avoid contacting real people while
 the AgentMail integration supports live delivery and replies.
+
+### 2026-09-22
+Renamed the project to **Counteroffer**, after the one move the agent makes on
+your behalf: it reads a vendor's quote, cites a real competing offer, and asks
+for a better number. The rename went through the app, the rail mark, the page
+title, package metadata, the docs, the narration and the GitHub repo, which is
+now `divagr18/counteroffer`.
+
+Shipped and pushed: the redesigned board, mock-by-default email transport, the
+three Convex components, the three product bug fixes, the 2:30 demo cut and the
+nine screenshots. Repo description, homepage and topics set.
+
+One thing attempted and abandoned: narrating the demo in a cloned voice. Both
+local options were tried on a real GPU box over SSH. Chatterbox ran on CPU but
+sounded poor and forced a 1.25x tempo squeeze on the tightest cues. IndexTTS-2
+loaded but its 2.5 checkpoints ship a tiktoken vocabulary while the code wants
+`bpe.model`; pairing the 2.0 vocabulary with 2.5 weights corrupted the
+token-to-duration mapping and produced speech roughly two and a half times too
+fast. Qwen3-TTS installed cleanly with CUDA and the model downloaded after a
+hung Hugging Face transfer was killed and retried, but the deadline arrived
+first. The video ships silent with its caption file, which was always the
+fallback. `docs/demo/qwen_tts.py` is the closest working path if anyone picks
+this up.
+
