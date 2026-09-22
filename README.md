@@ -4,7 +4,7 @@
 
 Counteroffer is an autonomous buying agent that finds local vendors, requests quotes, ranks their offers, and negotiates over email within your budget. It turns a request such as “a wedding photographer in Mumbai, eight hours, a highlight video, under ₹40,000” into a live sourcing campaign. You can inspect the evidence, read each conversation, compare the full cost, and approve the final selection.
 
-[Open the app](https://lovely-cod-509.convex.site) · [Build log](hackathon.md) · [Run locally](RUNBOOK.md)
+[Open the app](https://lovely-cod-509.convex.site) · [Source code](https://github.com/divagr18/counteroffer) · [Build log](hackathon.md) · [Run locally](RUNBOOK.md)
 
 Built for the [Convex All Gas Hackathon](https://www.convex.dev/hackathons/all-gas), using Convex, OpenAI, Firecrawl, and an AgentMail integration.
 

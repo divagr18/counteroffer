@@ -1,11 +1,11 @@
-# Procurement Network
+# Counteroffer
 
 ## Hackathon
 **Convex All Gas Hackathon**  
 Sponsors: **Convex × OpenAI × Firecrawl × AgentMail**
 
 ## Working Title
-**Procurement Network**
+**Counteroffer**
 
 ### Alternate Names
 - **Make Them Compete**
@@ -31,7 +31,7 @@ Example:
 
 > “I need a wedding photographer in Mumbai on October 18. Budget ₹40,000. Need 8 hours of coverage, edited photos, and a 3-minute highlight reel.”
 
-Procurement Network:
+Counteroffer:
 
 1. Searches and crawls the web for relevant photographers.
 2. Extracts structured vendor capabilities, pricing clues, location, reviews, contact information, and portfolio quality signals.
@@ -111,7 +111,7 @@ A project should pass this test:
 
 > **Can a judge understand why this is cool from a 10–15 second screen recording with the sound off?**
 
-Procurement Network scores extremely well.
+Counteroffer scores extremely well.
 
 | Dimension | Score | Why |
 |---|---:|---|
@@ -1583,7 +1583,7 @@ Use two layers:
 
 Say:
 
-> “Normally I'd search dozens of photographers, fill forms, wait for responses, and compare quotes manually. Here I just tell Procurement Network what I need.”
+> “Normally I'd search dozens of photographers, fill forms, wait for responses, and compare quotes manually. Here I just tell Counteroffer what I need.”
 
 Enter:
 
@@ -2453,7 +2453,7 @@ Google and marketplaces mostly tell you:
 
 > **Who exists?**
 
-Procurement Network gradually learns:
+Counteroffer gradually learns:
 
 > **Who actually responds?**
 
@@ -2527,10 +2527,10 @@ If that loop feels real, fast, and visually alive, the project will look substan
 
 # 76. One-Sentence Submission Version
 
-> **Procurement Network is an autonomous buyer that searches the web for suppliers, contacts and negotiates with them over its own inbox, compares live offers in real time, and builds a private supplier network that gets smarter with every purchase.**
+> **Counteroffer is an autonomous buyer that searches the web for suppliers, contacts and negotiates with them over its own inbox, compares live offers in real time, and builds a private supplier network that gets smarter with every purchase.**
 
 ---
 
 # 77. One-Sentence Demo Version
 
-> **Instead of searching for vendors and asking for quotes yourself, tell Procurement Network what you need and make the market compete for you.**
+> **Instead of searching for vendors and asking for quotes yourself, tell Counteroffer what you need and make the market compete for you.**

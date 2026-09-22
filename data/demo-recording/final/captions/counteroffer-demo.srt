@@ -1,14 +1,14 @@
 1
 00:00:00,000 --> 00:00:05,500
-Procurement Network is an autonomous buyer. Tell it what you need, and it makes vendors compete for you over email.
+Counteroffer is an autonomous buyer. It makes vendors compete for what you need.
 
 2
 00:00:05,700 --> 00:00:10,000
-This board is live. A photographer just replied, and the agent pulled the quote straight out of the email.
+This board is live. A photographer just replied.
 
 3
 00:00:10,200 --> 00:00:14,000
-Thirty-nine thousand. It counters at thirty-five and a half, inside the budget I set.
+Thirty-nine thousand. It counters at thirty-five and a half.
 
 4
 00:00:14,200 --> 00:00:18,000
@@ -20,7 +20,7 @@ Wedding photographer, Mumbai, October eighteenth, eight hours, a highlight video
 
 6
 00:00:25,200 --> 00:00:30,000
-The agent turns that into requirements and a budget band, and I can edit both.
+It turns that into requirements and a budget I can edit.
 
 7
 00:00:30,200 --> 00:00:34,000
@@ -32,7 +32,7 @@ Start sourcing, and Firecrawl searches the live web. Six queries, thirty-five ca
 
 9
 00:00:40,200 --> 00:00:45,000
-It pulls the contact details off each one and merges duplicates into a single vendor.
+It pulls contacts off each site and merges duplicates.
 
 10
 00:00:45,200 --> 00:00:50,000
@@ -44,7 +44,7 @@ This campaign already has seven qualified vendors, so I put it to work.
 
 12
 00:00:55,200 --> 00:00:59,000
-Each campaign gets its own inbox, and the agent writes every email itself.
+Each campaign gets its own inbox.
 
 13
 00:00:59,200 --> 00:01:05,000
@@ -76,7 +76,7 @@ BudgetClicks opened at thirty thousand. Asked what was actually included, the al
 
 20
 00:01:41,700 --> 00:01:46,500
-Over the hard budget, so it is out. That limit lives in code, not in a prompt.
+Over the hard budget, so it is out. That limit lives in code.
 
 21
 00:01:46,700 --> 00:01:52,000
