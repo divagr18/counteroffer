@@ -1,9 +1,9 @@
 {
-  "name": "procurement-network",
+  "name": "counteroffer",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Procurement Network — an autonomous buyer that discovers vendors, negotiates over email, and builds your private supplier graph. Convex × OpenAI × Firecrawl × AgentMail.",
+  "description": "Counteroffer — an autonomous buyer that discovers vendors, negotiates over email, and builds your private supplier graph. Convex × OpenAI × Firecrawl × AgentMail.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -13,9 +13,13 @@
     "typecheck": "tsc --noEmit",
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy",
+    "deploy": "static-hosting deploy",
     "convex:codegen": "convex codegen"
   },
   "dependencies": {
+    "@convex-dev/action-retrier": "^0.3.1",
+    "@convex-dev/rate-limiter": "^0.4.0",
+    "@convex-dev/static-hosting": "^0.2.1",
     "convex": "^1.45.0",
     "framer-motion": "^11.15.0",
     "openai": "^4.104.0",

@@ -1,19 +1,38 @@
 @import "tailwindcss";
 
 @theme {
+  /* Inter for interface text, IBM Plex Mono for every number and identifier.
+     Prices, counts, scores and latencies are the content here, so they get
+     their own voice rather than being set in the UI face. */
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
 
-  --color-canvas: #f8fafc;
+  /* Paper-white. Depth comes from small value steps and hairline borders,
+     never from drop shadows. */
+  --color-canvas: #fafafa;
   --color-surface: #ffffff;
-  --color-ink: #0f172a;
-  --color-ink-soft: #475569;
-  --color-ink-faint: #94a3b8;
-  --color-line: #e2e8f0;
-  --color-brand: #0f766e;
-  --color-brand-soft: #ccfbf1;
-  --color-money: #059669;
-  --color-warn: #d97706;
-  --color-danger: #dc2626;
+  --color-soft: #f6f6f6;
+  --color-raise: #f0f0f0;
+  --color-line: #e7e7e9;
+  --color-line-soft: #eeeef0;
+
+  --color-ink: #262626;
+  --color-ink-soft: #66676f;
+  --color-ink-faint: #8a8a8a;
+
+  /* One accent: the agent is doing something. */
+  --color-brand: #c2410c;
+  --color-brand-soft: #fff3eb;
+  --color-brand-dim: #9a340a;
+
+  /* Money moving the buyer's way. */
+  --color-money: #0f766e;
+  --color-money-soft: #e9f5f3;
+
+  --color-warn: #b45309;
+  --color-warn-soft: #fdf6ec;
+  --color-danger: #c0332b;
+  --color-danger-soft: #fdeceb;
 
   --animate-flash-in: flash-in 1.6s ease-out;
   --animate-rise: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1);
@@ -21,12 +40,10 @@
 
   @keyframes flash-in {
     0% {
-      background-color: #fef3c7;
-      box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.25);
+      background-color: #fff3eb;
     }
     100% {
       background-color: transparent;
-      box-shadow: 0 0 0 0 rgba(251, 191, 36, 0);
     }
   }
   @keyframes rise {
@@ -46,8 +63,8 @@
       transform: scale(1);
     }
     50% {
-      opacity: 0.45;
-      transform: scale(0.8);
+      opacity: 0.4;
+      transform: scale(0.75);
     }
   }
 }
@@ -62,10 +79,65 @@ body {
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
-  font-feature-settings: "cv02", "cv03", "cv04";
+  text-rendering: optimizeLegibility;
 }
 
+/* Numbers line up in columns or they are not a board. */
 .tabular {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Independent scroll regions: the shell owns the viewport, panels own their
+   overflow, so the page itself never scrolls on the campaign screen. */
+.scroll-region {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #d6d6d9 transparent;
+}
+.scroll-region::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-region::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-region::-webkit-scrollbar-thumb {
+  background: #d6d6d9;
+  border-radius: 8px;
+}
+.scroll-region::-webkit-scrollbar-thumb:hover {
+  background: #c2c2c6;
+}
+
+::selection {
+  background: #ffd9c7;
+  color: #262626;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+input,
+textarea,
+button {
+  font-family: inherit;
+  letter-spacing: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

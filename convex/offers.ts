@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { internalMutation, query } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import { internalMutation, query, type MutationCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { normalizeOffer } from "./lib/normalize";
 import { scoreOffer } from "./lib/score";
 import { offerLineItemValidator } from "./schema";
@@ -57,28 +57,81 @@ export const saveOffer = internalMutation({
     const vendor = await ctx.db.get(args.vendorId);
     if (!cv) throw new Error("campaignVendor not found");
 
+    // --- carry forward what this vendor already told us -------------------
+    // A negotiation reply normally restates only the price ("we can do
+    // ₹34,000 all-inclusive"). Rebuilding the offer from that message alone
+    // would erase the coverage, deliverables and timeline agreed two emails
+    // ago, so each round would look less complete than the one before it.
+    const history = await ctx.db
+      .query("offers")
+      .withIndex("by_campaign_vendor", (q) =>
+        q.eq("campaignVendorId", args.campaignVendorId),
+      )
+      .collect();
+    const latest =
+      history.sort((a, b) => b.revisionNumber - a.revisionNumber)[0] ?? null;
+
+    const statedTaxes = !args.missingFields.includes("taxes");
+    const knewTaxes = latest ? !latest.missingFields.includes("taxes") : false;
+
+    const merged = {
+      taxesIncluded: statedTaxes
+        ? args.taxesIncluded
+        : (latest?.taxesIncluded ?? false),
+      travelIncluded:
+        args.travelIncluded !== null
+          ? args.travelIncluded
+          : (latest?.travelIncluded ?? null),
+      travelAmount: args.travelAmount ?? latest?.travelAmount,
+      coverageHours: args.coverageHours ?? latest?.coverageHours,
+      deliverables:
+        args.deliverables.length > 0
+          ? args.deliverables
+          : (latest?.deliverables ?? []),
+      deliveryTimelineDays:
+        args.deliveryTimelineDays ?? latest?.deliveryTimelineDays,
+    };
+
     // --- normalize (doc §14) ---------------------------------------------
     const normalization = normalizeOffer({
       lineItems: args.lineItems,
-      taxesIncluded: args.taxesIncluded,
-      travelAmount: args.travelAmount,
+      taxesIncluded: merged.taxesIncluded,
+      travelAmount: merged.travelAmount,
       // Explicit "unknown" surfaces an assumption; absent means not tracked.
-      ...(args.travelIncluded === null
+      ...(merged.travelIncluded === null
         ? { travelIncluded: undefined }
-        : { travelIncluded: args.travelIncluded }),
+        : { travelIncluded: merged.travelIncluded }),
     });
 
     // --- completeness (doc §15): which key facts are actually known? -----
     const known = {
       price: normalization.subtotal > 0,
-      taxes: args.taxesIncluded || !args.missingFields.includes("taxes"),
-      travel: args.travelIncluded !== null,
-      hours: args.coverageHours !== null,
-      deliverables: args.deliverables.length > 0,
-      timeline: args.deliveryTimelineDays !== null,
+      taxes: statedTaxes || knewTaxes,
+      travel: merged.travelIncluded !== null,
+      hours: merged.coverageHours !== undefined,
+      deliverables: merged.deliverables.length > 0,
+      timeline: merged.deliveryTimelineDays !== undefined,
     };
     const knownCount = Object.values(known).filter(Boolean).length;
     const completenessScore = knownCount / Object.keys(known).length;
+
+    // Report what is still unanswered across the whole conversation, not just
+    // what the newest email happened to leave out.
+    const LABELS: Record<keyof typeof known, string> = {
+      price: "exact price",
+      taxes: "taxes",
+      travel: "travel",
+      hours: "coverage hours",
+      deliverables: "deliverables",
+      timeline: "delivery timeline",
+    };
+    const tracked = new Set(Object.values(LABELS));
+    const missingFields = [
+      ...(Object.keys(known) as (keyof typeof known)[])
+        .filter((k) => !known[k])
+        .map((k) => LABELS[k]),
+      ...args.missingFields.filter((f) => !tracked.has(f)),
+    ];
 
     // --- supersede previous active revision -------------------------------
     const previous = await ctx.db
@@ -105,16 +158,17 @@ export const saveOffer = internalMutation({
       lineItems: args.lineItems,
       subtotal: normalization.subtotal,
       taxAmount: normalization.taxAmount > 0 ? normalization.taxAmount : undefined,
-      taxesIncluded: args.taxesIncluded,
-      travelIncluded: args.travelIncluded === null ? undefined : args.travelIncluded,
+      taxesIncluded: merged.taxesIncluded,
+      travelIncluded:
+        merged.travelIncluded === null ? undefined : merged.travelIncluded,
       travelAmount: normalization.travelAmount > 0 ? normalization.travelAmount : undefined,
       estimatedTotal: normalization.estimatedTotal,
       assumptions: normalization.assumptions,
-      coverageHours: args.coverageHours,
-      deliverables: args.deliverables,
-      deliveryTimelineDays: args.deliveryTimelineDays,
+      coverageHours: merged.coverageHours,
+      deliverables: merged.deliverables,
+      deliveryTimelineDays: merged.deliveryTimelineDays,
       completenessScore,
-      missingFields: args.missingFields,
+      missingFields,
       status: "active",
       sourceMessageId: args.sourceMessageId,
       extractedAt: Date.now(),
@@ -145,9 +199,18 @@ export const saveOffer = internalMutation({
  * Recompute offer scores for every vendor with an offer (doc §20).
  * Called after any offer/stage change so the leaderboard stays live.
  */
-export const recomputeScores = internalMutation({
-  args: { campaignId: v.id("campaigns") },
-  handler: async (ctx, args) => {
+/**
+ * Recompute every vendor's offer score for a campaign.
+ *
+ * Exported as a plain helper so seeds and the live pipeline share one code
+ * path: a campaign whose scores were never computed ranks by nothing, and the
+ * board silently falls back to "cheapest", which is the exact outcome the
+ * scoring rules exist to prevent.
+ */
+export async function recomputeScoresFor(
+  ctx: MutationCtx,
+  args: { campaignId: Id<"campaigns"> },
+): Promise<void> {
     const campaign = await ctx.db.get(args.campaignId);
     if (!campaign) return;
     const targetBudget = campaign.spec?.targetBudget ?? campaign.targetBudget;
@@ -198,8 +261,14 @@ export const recomputeScores = internalMutation({
         historicalReliability,
       });
 
-      await ctx.db.patch(cv._id, { offerScore: result.score });
-    }
+    await ctx.db.patch(cv._id, { offerScore: result.score });
+  }
+}
+
+export const recomputeScores = internalMutation({
+  args: { campaignId: v.id("campaigns") },
+  handler: async (ctx, args) => {
+    await recomputeScoresFor(ctx, args);
   },
 });
 

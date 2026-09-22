@@ -1,10 +1,10 @@
 import { AnimatePresence, motion } from "framer-motion";
 import type { PipelineRow, Stage } from "../lib/types";
 import { formatDuration, formatINR } from "../lib/format";
-import { Badge } from "./ui";
+import { Num } from "./ui";
 
 const COLUMNS: { key: string; label: string; stages: Stage[] }[] = [
-  { key: "discovered", label: "Discovered", stages: ["discovered"] },
+  { key: "discovered", label: "Found", stages: ["discovered"] },
   { key: "qualified", label: "Qualified", stages: ["qualified"] },
   { key: "contacted", label: "Contacted", stages: ["contacted"] },
   { key: "replied", label: "Replied", stages: ["replied"] },
@@ -30,45 +30,50 @@ function VendorCard({
     offer && firstOffer && firstOffer.estimatedTotal > offer.estimatedTotal;
   const latency =
     cv.contactedAt && cv.repliedAt ? cv.repliedAt - cv.contactedAt : null;
+  const isFinalist = cv.stage === "finalist" || cv.stage === "selected";
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.96 }}
+      exit={{ opacity: 0, scale: 0.97 }}
       transition={{ type: "spring", stiffness: 350, damping: 30 }}
-      className="rounded-xl border border-line bg-surface p-3 shadow-[0_1px_3px_rgba(15,23,42,0.05)]"
+      className={`rounded-md border bg-surface px-2.5 py-2 ${
+        isFinalist ? "border-money/40" : "border-line"
+      }`}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-start justify-between gap-1.5">
         <button
           onClick={onOpenVendor}
-          className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold text-ink hover:text-brand hover:underline"
+          className="min-w-0 flex-1 truncate text-left text-[12.5px] font-medium text-ink hover:text-brand"
           title={`${vendor.name} — open profile`}
         >
           {vendor.name}
         </button>
         {vendor.isDemoVendor && (
-          <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-ink-faint">
+          <span
+            title="Scripted demo vendor"
+            className="shrink-0 font-mono text-[9px] text-ink-faint"
+          >
             demo
           </span>
         )}
       </div>
 
       {offer ? (
-        <div className="mt-2">
+        <div className="mt-1.5">
           {dropped ? (
-            <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-              <span className="tabular text-xs text-ink-faint line-through">
+            <div className="flex flex-wrap items-baseline gap-x-1.5">
+              <Num className="text-[11px] text-ink-faint line-through">
                 {formatINR(firstOffer.estimatedTotal)}
-              </span>
-              <span className="text-[11px] text-brand">→</span>
+              </Num>
               <motion.span
                 key={offer.estimatedTotal}
-                initial={{ backgroundColor: "rgba(16,185,129,0.35)" }}
-                animate={{ backgroundColor: "rgba(16,185,129,0)" }}
+                initial={{ backgroundColor: "#fff3eb" }}
+                animate={{ backgroundColor: "rgba(0,0,0,0)" }}
                 transition={{ duration: 1.2 }}
-                className="tabular break-all rounded px-1 text-sm font-bold text-money"
+                className="tabular rounded px-0.5 text-[13px] font-semibold text-money"
               >
                 {formatINR(offer.estimatedTotal)}
               </motion.span>
@@ -76,50 +81,51 @@ function VendorCard({
           ) : (
             <motion.div
               key={offer.estimatedTotal}
-              initial={{ backgroundColor: "rgba(16,185,129,0.35)" }}
-              animate={{ backgroundColor: "rgba(16,185,129,0)" }}
+              initial={{ backgroundColor: "#fff3eb" }}
+              animate={{ backgroundColor: "rgba(0,0,0,0)" }}
               transition={{ duration: 1.2 }}
-              className="tabular break-all rounded px-1 text-sm font-bold text-ink"
+              className="tabular rounded px-0.5 text-[13px] font-semibold text-ink"
             >
               {formatINR(offer.estimatedTotal)}
             </motion.div>
           )}
-          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10.5px]">
             {cv.availability === true && (
-              <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-money">
-                Available ✓
-              </span>
+              <span className="text-money">date confirmed</span>
             )}
             {offer.missingFields.length > 0 && (
-              <Badge tone="warn">missing {offer.missingFields.length}</Badge>
+              <span className="text-warn" title={offer.missingFields.join(", ")}>
+                {offer.missingFields.length} unanswered
+              </span>
             )}
           </div>
         </div>
       ) : cv.stage === "eliminated" ? (
-        <div className="mt-2 text-[11px] text-danger">
+        <div className="mt-1 text-[11px] text-danger">
           {cv.eliminationReason ?? "eliminated"}
         </div>
       ) : null}
 
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <div className="min-w-0 truncate text-[11px] text-ink-faint">
-          {latency !== null && <span>replied in {formatDuration(latency)}</span>}
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <div className="min-w-0 truncate text-[10.5px] text-ink-faint">
+          {latency !== null && (
+            <>
+              replied in <Num>{formatDuration(latency)}</Num>
+            </>
+          )}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 text-[11px] font-medium">
           {cv.stage === "finalist" && onSelectVendor && (
             <button
               onClick={onSelectVendor}
-              className="text-[11px] font-semibold text-money hover:underline"
+              className="text-money hover:underline"
             >
-              Select
+              Choose
             </button>
           )}
           {row.thread && (
-            <button
-              onClick={onOpenThread}
-              className="text-[11px] font-semibold text-brand hover:underline"
-            >
-              Thread
+            <button onClick={onOpenThread} className="text-brand hover:underline">
+              Emails
             </button>
           )}
         </div>
@@ -139,24 +145,35 @@ export function Pipeline({
   onOpenVendor?: (row: PipelineRow) => void;
   onSelectVendor?: (cvId: string) => void;
 }) {
+  const counts = COLUMNS.map(
+    (col) => rows.filter((r) => col.stages.includes(r.cv.stage)).length,
+  );
+  // An empty stage keeps its label but gives its width back: the funnel
+  // visibly narrows where nothing is waiting.
+  const template = counts
+    .map((n) => (n === 0 ? "minmax(82px, 0.42fr)" : "minmax(150px, 1fr)"))
+    .join(" ");
+
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-      {COLUMNS.map((col) => {
+    <div
+      className="grid gap-2 max-lg:!grid-cols-2 max-lg:!grid-rows-none"
+      style={{ gridTemplateColumns: template }}
+    >
+      {COLUMNS.map((col, colIndex) => {
         const items = rows.filter((r) => col.stages.includes(r.cv.stage));
         return (
-          <div
-            key={col.key}
-            className="rounded-2xl border border-line bg-slate-50/60 p-2"
-          >
-            <div className="flex items-center justify-between px-2 py-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+          <div key={col.key} className="min-w-0">
+            <div className="mb-1.5 flex items-baseline justify-between gap-2 border-b border-line pb-1">
+              <span className="text-[11.5px] font-medium text-ink-soft">
                 {col.label}
               </span>
-              <span className="tabular rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-ink-soft">
+              <Num
+                className={`text-[11px] ${counts[colIndex] > 0 ? "text-ink-soft" : "text-ink-faint"}`}
+              >
                 {items.length}
-              </span>
+              </Num>
             </div>
-            <div className="flex flex-col gap-2 p-1">
+            <div className="flex flex-col gap-1.5">
               <AnimatePresence initial={false}>
                 {items.map((row) => (
                   <VendorCard
@@ -171,7 +188,7 @@ export function Pipeline({
                 ))}
               </AnimatePresence>
               {items.length === 0 && (
-                <div className="rounded-xl border border-dashed border-line px-2 py-4 text-center text-[11px] text-ink-faint">
+                <div className="rounded-md border border-dashed border-line px-1.5 py-3 text-center text-[11px] text-ink-faint">
                   —
                 </div>
               )}

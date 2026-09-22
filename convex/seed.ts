@@ -1,6 +1,7 @@
-import { mutation, type MutationCtx } from "./_generated/server";
+import { internalMutation, mutation, type MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { normalizeOffer } from "./lib/normalize";
+import { recomputeScoresFor } from "./offers";
 import type { OfferLineItem } from "./lib/types";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -153,6 +154,54 @@ const CATERING_VENDORS: DemoVendorSeed[] = [
   },
 ];
 
+/**
+ * A vendor that is not one of the scripted personas.
+ *
+ * It carries a real address and `isDemoVendor: false`, so when the deployment
+ * runs with EMAIL_TRANSPORT="live" its RFQ is drafted by the model, delivered
+ * by AgentMail, and answered through the Svix-verified webhook. Under the
+ * default mock transport nothing is sent and it answers from the persona
+ * engine like everyone else.
+ *
+ * Override the address with the LIVE_VENDOR_EMAIL deployment env var.
+ */
+const LIVE_VENDOR_FALLBACK_EMAIL = "developer@bizdateup.com";
+
+function liveVendorEmail(): string {
+  return process.env.LIVE_VENDOR_EMAIL ?? LIVE_VENDOR_FALLBACK_EMAIL;
+}
+
+async function seedLiveVendor(
+  ctx: MutationCtx,
+  category: string,
+  services: string[],
+): Promise<Id<"vendors">> {
+  const email = liveVendorEmail();
+  const existing = await ctx.db
+    .query("vendors")
+    .withIndex("by_email", (q) => q.eq("email", email))
+    .first();
+  if (existing) return existing._id;
+  return await ctx.db.insert("vendors", {
+    name: "Verde Studio",
+    canonicalDomain: email.split("@")[1],
+    category,
+    description:
+      "Not a scripted persona. With live transport enabled its RFQ is delivered by AgentMail to a real mailbox.",
+    locations: ["Mumbai"],
+    services,
+    pricingSignals: [],
+    email,
+    website: undefined,
+    aliases: [],
+    sourceUrls: [],
+    confidence: 1,
+    isDemoVendor: false,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+}
+
 function lineItem(
   label: string,
   totalPrice: number,
@@ -187,7 +236,7 @@ async function ensureUser(ctx: MutationCtx): Promise<Id<"users">> {
   if (existing) return existing._id;
   return await ctx.db.insert("users", {
     name: "Demo Buyer",
-    email: "demo@procurement.network",
+    email: "demo@counteroffer.app",
     createdAt: Date.now(),
   });
 }
@@ -237,7 +286,7 @@ export const seedDemo = mutation({
   handler: async (ctx) => {
     const already = await ctx.db
       .query("campaigns")
-      .filter((q) => q.eq(q.field("title"), "Wedding Photographer — Mumbai"))
+      .filter((q) => q.eq(q.field("title"), "Engagement Shoot — Bandra"))
       .first();
     if (already) return { seeded: false, campaignId: already._id };
 
@@ -247,7 +296,7 @@ export const seedDemo = mutation({
 
     const campaignId = await ctx.db.insert("campaigns", {
       userId,
-      title: "Wedding Photographer — Mumbai",
+      title: "Engagement Shoot — Bandra",
       category: "photographer",
       description:
         "Wedding photographer in Mumbai on October 18. Eight hours, candid photography and highlight video. Try to stay under ₹40,000.",
@@ -545,6 +594,10 @@ export const seedDemo = mutation({
       });
     }
 
+    // Score the seeded board, or it ranks by nothing and the cheapest
+    // incomplete quote surfaces as "best offer".
+    await recomputeScoresFor(ctx, { campaignId });
+
     return { seeded: true, campaignId };
   },
 });
@@ -557,7 +610,7 @@ export const seedInstantDemo = mutation({
 
     const campaignId = await ctx.db.insert("campaigns", {
       userId,
-      title: "Wedding Photographer — Live Demo",
+      title: "Wedding Photographer — Mumbai",
       category: "photographer",
       description:
         "Wedding photographer in Mumbai on October 18. Eight hours, candid photography and highlight video. Try to stay under ₹40,000.",
@@ -590,13 +643,31 @@ export const seedInstantDemo = mutation({
       });
     }
 
-    await ctx.db.insert("campaignEvents", {
+    // Plus one real vendor whose RFQ is genuinely sent over AgentMail.
+    const liveVendorId = await seedLiveVendor(ctx, "photographer", [
+      "wedding photography",
+      "candid photography",
+      "highlight films",
+    ]);
+    await ctx.db.insert("campaignVendors", {
       campaignId,
-      type: "campaign.created",
-      summary: "Live demo campaign created — vendors pre-qualified",
+      vendorId: liveVendorId,
+      stage: "qualified",
+      // Highest score so it is always inside the outreach cap.
+      qualificationScore: 96,
+      satisfiedRequirements: ["req-0", "req-1", "req-2", "req-3"],
+      missingRequirements: [],
       createdAt: now,
     });
 
+    await ctx.db.insert("campaignEvents", {
+      campaignId,
+      type: "campaign.created",
+      summary: "Campaign created — vendors pre-qualified and ready to contact",
+      createdAt: now,
+    });
+
+    await recomputeScoresFor(ctx, { campaignId });
     return { campaignId };
   },
 });
@@ -658,3 +729,75 @@ export const seedCateringDemo = mutation({
     return { campaignId };
   },
 });
+
+/**
+ * Wipe every table. Internal only, so it is reachable from the CLI but never
+ * from the browser or the published URL. Used to put the demo deployment into
+ * a known state before recording.
+ */
+export const resetDemoData = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const tables = [
+      "agentActions",
+      "approvalRequests",
+      "campaignEvents",
+      "campaignVendors",
+      "campaigns",
+      "crawlJobs",
+      "mailboxes",
+      "messages",
+      "offers",
+      "threads",
+      "users",
+      "vendorEvidence",
+      "vendorMetrics",
+      "vendors",
+    ] as const;
+
+    const deleted: Record<string, number> = {};
+    for (const table of tables) {
+      const rows = await ctx.db.query(table).collect();
+      for (const row of rows) await ctx.db.delete(row._id);
+      deleted[table] = rows.length;
+    }
+    return deleted;
+  },
+});
+
+/**
+ * Remove campaigns that never got past the requirements screen, along with
+ * everything hanging off them. Taking a screenshot of the review screen leaves
+ * one behind, and an empty duplicate on the home table is just confusing.
+ */
+export const deleteDraftCampaigns = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const campaigns = await ctx.db.query("campaigns").collect();
+    const drafts = campaigns.filter(
+      (c) => c.status === "draft" || c.status === "requirements_review",
+    );
+
+    for (const campaign of drafts) {
+      for (const table of [
+        "campaignVendors",
+        "campaignEvents",
+        "approvalRequests",
+        "crawlJobs",
+        "mailboxes",
+        "messages",
+        "offers",
+        "threads",
+      ] as const) {
+        const rows = await ctx.db
+          .query(table)
+          .filter((q) => q.eq(q.field("campaignId"), campaign._id))
+          .collect();
+        for (const row of rows) await ctx.db.delete(row._id);
+      }
+      await ctx.db.delete(campaign._id);
+    }
+    return { deleted: drafts.length };
+  },
+});
+

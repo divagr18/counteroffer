@@ -44,6 +44,8 @@ import {
   type SearchPlan,
 } from "./lib/llmSchemas";
 import { decideNegotiation } from "./lib/negotiate";
+import { rateLimiter, retrier } from "./lib/components";
+import { runIdValidator, runResultValidator } from "@convex-dev/action-retrier";
 import { formatINR, randomSlug } from "./helpers";
 import {
   CLARIFICATION_SYSTEM,
@@ -56,6 +58,73 @@ import {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Email transport.
+ *
+ * Defaults to "mock": nothing is handed to AgentMail, no inbox is created, and
+ * every vendor answers from the scripted persona engine through the real
+ * parsing/negotiation pipeline. Real businesses are discovered from the live
+ * web, so the safe default has to be the one that cannot email them.
+ *
+ * Set the EMAIL_TRANSPORT deployment variable to "live" to actually send.
+ */
+function emailTransport(): "mock" | "live" {
+  return process.env.EMAIL_TRANSPORT === "live" ? "live" : "mock";
+}
+
+/** True when this vendor's mail is simulated rather than delivered. */
+function isSimulated(vendor: Doc<"vendors">): boolean {
+  return vendor.isDemoVendor || emailTransport() === "mock";
+}
+
+/**
+ * Outbound-email throttle (@convex-dev/rate-limiter).
+ *
+ * Real businesses are on the other end of these sends, so politeness is
+ * enforced here rather than trusted to a prompt. A suppressed send is written
+ * to the activity feed so it is visible instead of silently vanishing.
+ *
+ * The per-vendor bucket applies only when an email actually leaves the
+ * building. Scripted demo vendors run the same pipeline with local transport,
+ * so throttling them would only slow the demo without protecting anyone.
+ */
+async function canSendEmail(
+  ctx: ActionCtx,
+  campaignId: Id<"campaigns">,
+  vendor: Doc<"vendors">,
+  campaignVendorId?: Id<"campaignVendors">,
+): Promise<boolean> {
+  if (!isSimulated(vendor)) {
+    const perVendor = await rateLimiter.limit(ctx, "vendorEmail", {
+      key: vendor._id,
+    });
+    if (!perVendor.ok) {
+      const minutes = Math.max(1, Math.ceil((perVendor.retryAfter ?? 0) / 60000));
+      await ctx.runMutation(internal.campaigns.addEvent, {
+        campaignId,
+        campaignVendorId,
+        type: "email.throttled",
+        summary: `Held back an email to ${vendor.name} — per-vendor limit reached, retry in ${minutes} min`,
+      });
+      return false;
+    }
+  }
+
+  const perCampaign = await rateLimiter.limit(ctx, "campaignEmail", {
+    key: campaignId,
+  });
+  if (!perCampaign.ok) {
+    await ctx.runMutation(internal.campaigns.addEvent, {
+      campaignId,
+      campaignVendorId,
+      type: "email.throttled",
+      summary: "Campaign hourly email limit reached — outbound mail paused",
+    });
+    return false;
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +264,20 @@ export const runDiscovery = internalAction({
     const campaign = data?.campaign;
     const spec = campaign?.spec;
     if (!campaign || !spec) return;
+
+    // Firecrawl search + enrichment is the paid path. Throttle per campaign so
+    // a repeated Start-sourcing click cannot re-crawl the web on our bill.
+    const allowed = await rateLimiter.limit(ctx, "discoveryRun", {
+      key: args.campaignId,
+    });
+    if (!allowed.ok) {
+      await ctx.runMutation(internal.campaigns.addEvent, {
+        campaignId: args.campaignId,
+        type: "discovery.throttled",
+        summary: `Discovery already ran for this campaign — next crawl available in ${Math.max(1, Math.ceil((allowed.retryAfter ?? 0) / 60000))} min`,
+      });
+      return;
+    }
 
     // --- search plan -----------------------------------------------------
     let plan: SearchPlan;
@@ -604,9 +687,29 @@ export const setupMailbox = internalAction({
     if (!data || data.mailbox) return;
 
     const slug = randomSlug(6);
+
+    if (emailTransport() === "mock") {
+      // Simulated inbox: same shape, same UI, no provider call and no webhook.
+      const mailboxId = await ctx.runMutation(internal.agents.insertMailbox, {
+        campaignId: args.campaignId,
+        inboxId: `mock-${args.campaignId.slice(-6)}-${slug}`,
+        email: `camp-${args.campaignId.slice(-6)}-${slug}@sandbox.agentmail.to`,
+      });
+      await ctx.runMutation(internal.campaigns.setMailbox, {
+        campaignId: args.campaignId,
+        mailboxId,
+      });
+      await ctx.runMutation(internal.campaigns.addEvent, {
+        campaignId: args.campaignId,
+        type: "mailbox.created",
+        summary: `Campaign inbox created (simulated): camp-${args.campaignId.slice(-6)}-${slug}@sandbox.agentmail.to`,
+      });
+      return;
+    }
+
     const inbox = await createInbox({
       username: `camp-${args.campaignId.slice(-6)}-${slug}`,
-      displayName: "Procurement Network",
+      displayName: "Counteroffer",
       clientId: `campaign-${args.campaignId}`,
       metadata: { campaignId: args.campaignId },
     });
@@ -693,8 +796,11 @@ export const startOutreach = internalAction({
       return;
     }
 
+    // Staggered 12s apart so a burst of RFQs never looks like a blast, and
+    // each one goes through the action retrier so a transient AgentMail or
+    // OpenAI failure does not silently cost us a vendor.
     for (let i = 0; i < qualified.length; i++) {
-      await ctx.scheduler.runAfter(i * 12000, internal.agents.sendRfq, {
+      await ctx.scheduler.runAfter(i * 12000, internal.agents.enqueueRfq, {
         campaignVendorId: qualified[i].cv._id,
       });
     }
@@ -703,6 +809,49 @@ export const startOutreach = internalAction({
       type: "outreach.started",
       summary: `Sending tailored RFQs to ${qualified.length} qualified vendors`,
     });
+  },
+});
+
+/**
+ * Hands one RFQ to the action retrier. Scheduled (not called directly) so the
+ * 12s stagger between vendors survives, while each send gets up to four
+ * attempts with exponential backoff.
+ */
+export const enqueueRfq = internalMutation({
+  args: { campaignVendorId: v.id("campaignVendors") },
+  handler: async (ctx, args) => {
+    await retrier.run(
+      ctx,
+      internal.agents.sendRfq,
+      { campaignVendorId: args.campaignVendorId },
+      { onComplete: internal.agents.rfqAttemptFinished },
+    );
+  },
+});
+
+/**
+ * Runs once the retrier stops, however it stopped. Without this a vendor that
+ * exhausted its retries just sits in "qualified" forever with nothing in the
+ * activity feed to say why.
+ */
+export const rfqAttemptFinished = internalMutation({
+  args: { runId: runIdValidator, result: runResultValidator },
+  handler: async (ctx, args) => {
+    if (args.result.type === "success") return;
+    const reason =
+      args.result.type === "failed" ? args.result.error : "canceled";
+    const campaigns = await ctx.db
+      .query("campaigns")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .collect();
+    for (const campaign of campaigns) {
+      await ctx.db.insert("campaignEvents", {
+        campaignId: campaign._id,
+        type: "outreach.failed",
+        summary: `An RFQ could not be sent after repeated attempts: ${reason.slice(0, 160)}`,
+        createdAt: Date.now(),
+      });
+    }
   },
 });
 
@@ -716,6 +865,8 @@ export const sendRfq = internalAction({
     if (cv.stage !== "qualified") return;
     const spec = campaign.spec;
     if (!spec) return;
+
+    if (!(await canSendEmail(ctx, campaign._id, vendor, cv._id))) return;
 
     const draft = await completeJson<EmailDraft>({
       system: RFQ_DRAFT_SYSTEM,
@@ -735,13 +886,8 @@ export const sendRfq = internalAction({
       temperature: 0.7,
     });
 
-    await ctx.runMutation(internal.campaigns.setStageInternal, {
-      campaignVendorId: cv._id,
-      stage: "contacted",
-    });
-
-    if (vendor.isDemoVendor) {
-      // Scripted demo universe: same pipeline, simulated transport (doc §49).
+    if (isSimulated(vendor)) {
+      // Same pipeline, simulated transport (doc §49).
       const externalThreadId = `demo-${cv._id}`;
       const threadId = await ctx.runMutation(internal.threads.ensureThread, {
         campaignId: campaign._id,
@@ -761,7 +907,7 @@ export const sendRfq = internalAction({
         kind: "rfq",
         timestamp: Date.now(),
       });
-      scheduleDemoReply(ctx, cv._id, vendor.demoBehavior ?? "standard", demoReplyDelay(vendor.demoBehavior ?? "standard"));
+      scheduleDemoReply(ctx, cv._id, vendor.demoBehavior ?? defaultBehavior(vendor), demoReplyDelay(vendor.demoBehavior ?? defaultBehavior(vendor)));
     } else {
       const sent = await sendMessage({
         inboxId: mailbox.inboxId,
@@ -794,11 +940,18 @@ export const sendRfq = internalAction({
       });
     }
 
+    // Marked contacted only once the email has actually left, so a retried
+    // attempt after a transient send failure still delivers.
+    await ctx.runMutation(internal.campaigns.setStageInternal, {
+      campaignVendorId: cv._id,
+      stage: "contacted",
+    });
+
     await ctx.runMutation(internal.campaigns.addEvent, {
       campaignId: campaign._id,
       campaignVendorId: cv._id,
       type: "outreach.sent",
-      summary: `RFQ sent to ${vendor.name}${vendor.isDemoVendor ? " (demo vendor)" : ""}`,
+      summary: `RFQ sent to ${vendor.name}${isSimulated(vendor) ? "" : " (live email)"}`,
     });
   },
 });
@@ -1100,6 +1253,7 @@ export const sendClarification = internalAction({
       await evaluateNegotiation(ctx, cv._id);
       return;
     }
+    if (!(await canSendEmail(ctx, campaign._id, vendor, cv._id))) return;
 
     const offer = cv.currentOfferId
       ? await ctx.runQuery(api.offers.revisions, {
@@ -1127,7 +1281,7 @@ export const sendClarification = internalAction({
     const subject = thread?.subject ?? `Following up — ${campaign.title}`;
     const lastInbound = [...messages].reverse().find((m) => m.direction === "inbound");
 
-    if (vendor.isDemoVendor) {
+    if (isSimulated(vendor)) {
       if (!thread) return;
       await ctx.runMutation(internal.threads.recordMessage, {
         threadId: thread._id,
@@ -1141,7 +1295,7 @@ export const sendClarification = internalAction({
         kind: "clarification",
         timestamp: Date.now(),
       });
-      scheduleDemoReply(ctx, cv._id, vendor.demoBehavior ?? "standard", 20_000 + Math.floor(Math.random() * 15_000));
+      scheduleDemoReply(ctx, cv._id, vendor.demoBehavior ?? defaultBehavior(vendor), 20_000 + Math.floor(Math.random() * 15_000));
     } else {
       let ref: { messageId: string; threadId: string };
       if (lastInbound?.externalMessageId) {
@@ -1337,9 +1491,10 @@ async function evaluateNegotiation(
   });
 
   if (!mailbox || !thread) return;
+  if (!(await canSendEmail(ctx, campaign._id, vendor, campaignVendorId))) return;
   const lastInbound = [...messages].reverse().find((m) => m.direction === "inbound");
 
-  if (vendor.isDemoVendor) {
+  if (isSimulated(vendor)) {
     await ctx.runMutation(internal.threads.recordMessage, {
       threadId: thread._id,
       campaignId: campaign._id,
@@ -1352,7 +1507,7 @@ async function evaluateNegotiation(
       kind: "counteroffer",
       timestamp: Date.now(),
     });
-    scheduleDemoReply(ctx, cv._id, vendor.demoBehavior ?? "standard", 20_000 + Math.floor(Math.random() * 20_000));
+    scheduleDemoReply(ctx, cv._id, vendor.demoBehavior ?? defaultBehavior(vendor), 20_000 + Math.floor(Math.random() * 20_000));
   } else {
     let ref: { messageId: string; threadId: string };
     if (lastInbound?.externalMessageId) {
@@ -1669,10 +1824,11 @@ export const sendNudge = internalAction({
     if (!row) return;
     const { cv, vendor, campaign, mailbox, thread } = row;
     if (!mailbox || !thread || cv.stage !== "contacted") return;
+    if (!(await canSendEmail(ctx, campaign._id, vendor, cv._id))) return;
 
     const body = `Hi ${vendor.name},\n\nJust following up on my earlier request for a quote — we're finalizing our shortlist. Could you share availability and your complete price including taxes when you get a moment?\n\nThank you.`;
 
-    if (vendor.isDemoVendor) {
+    if (isSimulated(vendor)) {
       await ctx.runMutation(internal.threads.recordMessage, {
         threadId: thread._id,
         campaignId: campaign._id,
@@ -1686,7 +1842,7 @@ export const sendNudge = internalAction({
         timestamp: Date.now(),
       });
       if ((vendor.demoBehavior ?? "") !== "ghost") {
-        scheduleDemoReply(ctx, cv._id, vendor.demoBehavior ?? "standard", 30_000);
+        scheduleDemoReply(ctx, cv._id, vendor.demoBehavior ?? defaultBehavior(vendor), 30_000);
       }
     } else if (vendor.email) {
       const ref = await sendMessage({
@@ -1742,6 +1898,16 @@ function demoReplyDelay(behavior: string): number {
   }
 }
 
+/**
+ * A vendor with no scripted persona still has to answer in mock mode. Pick a
+ * stable one from the name so the same vendor always behaves the same way.
+ */
+function defaultBehavior(vendor: Doc<"vendors">): string {
+  let hash = 0;
+  for (const ch of vendor.name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return ["negotiator", "standard", "negotiator", "cheapest_incomplete"][hash % 4];
+}
+
 function scheduleDemoReply(
   ctx: ActionCtx,
   campaignVendorId: Id<"campaignVendors">,
@@ -1764,11 +1930,11 @@ export const simulateDemoReply = internalAction({
     const row = await loadCvBundle(ctx, args.campaignVendorId);
     if (!row) return;
     const { cv, vendor, campaign, messages } = row;
-    if (!vendor.isDemoVendor || !vendor.email) return;
+    if (!isSimulated(vendor) || !vendor.email) return;
     const spec = campaign.spec;
     if (!spec) return;
 
-    const behavior = vendor.demoBehavior ?? "standard";
+    const behavior = vendor.demoBehavior ?? defaultBehavior(vendor);
     const flavor =
       CATEGORY_FLAVOR[spec.category] ?? CATEGORY_FLAVOR.photographer;
     const inboundCount = messages.filter((m) => m.direction === "inbound").length;
@@ -1788,7 +1954,9 @@ export const simulateDemoReply = internalAction({
     switch (behavior) {
       case "negotiator": {
         if (inboundCount === 0) {
-          const q = roundTo500(target * 1.12);
+          // Spread openings per vendor: two negotiators quoting the identical
+          // number on the same board reads as scripted.
+          const q = roundTo500(target * (1.08 + vendorSpread(vendor) * 0.14));
           replyText = `Hi,\n\nThanks for reaching out! Yes, we are available on ${date}.\nOur complete package is ₹${q.toLocaleString("en-IN")} including taxes and travel — ${flavor.deliverables}.\n\nLet me know if you'd like to proceed.\n\n— ${vendor.name}`;
         } else if (isCounter && counterAmount) {
           if (counterAmount >= target * 1.02) {
@@ -1863,6 +2031,13 @@ export const simulateDemoReply = internalAction({
     });
   },
 });
+
+/** Stable 0..1 offset derived from the vendor name. */
+function vendorSpread(vendor: Doc<"vendors">): number {
+  let hash = 0;
+  for (const ch of vendor.name) hash = (hash * 131 + ch.charCodeAt(0)) >>> 0;
+  return (hash % 1000) / 1000;
+}
 
 function roundTo500(value: number): number {
   return Math.round(value / 500) * 500;

@@ -1,37 +1,40 @@
-import type {
-  CampaignEvent,
-  CampaignView,
-  PipelineRow,
-} from "../lib/types";
-import { formatINR } from "../lib/format";
+import type { ReactNode } from "react";
 import { motion } from "framer-motion";
+import type { CampaignEvent, CampaignView, PipelineRow } from "../lib/types";
+import { formatDate, formatINR } from "../lib/format";
 import { ActivityFeed } from "./ActivityFeed";
 import { Approvals } from "./Approvals";
 import { Counters } from "./Counters";
 import { Leaderboard } from "./Leaderboard";
 import { Pipeline } from "./Pipeline";
-import { Badge } from "./ui";
+import { Badge, Button, LiveDot, Num, Panel } from "./ui";
 
 export function CampaignLive({
   view,
   rows,
   events,
+  tab = "live",
+  onTab,
+  compare,
   onOpenThread,
-  onOpenCompare,
   onOpenVendor,
   onResolveApproval,
   onSelectVendor,
   onCloseCampaign,
+  onContactVendors,
 }: {
   view: CampaignView;
   rows: PipelineRow[];
   events: CampaignEvent[];
+  tab?: "live" | "compare";
+  onTab?: (tab: "live" | "compare") => void;
+  compare?: ReactNode;
   onOpenThread?: (row: PipelineRow) => void;
-  onOpenCompare?: () => void;
   onOpenVendor?: (row: PipelineRow) => void;
   onResolveApproval?: (approvalId: string, approve: boolean) => void;
   onSelectVendor?: (cvId: string) => void;
   onCloseCampaign?: () => void;
+  onContactVendors?: () => void;
 }) {
   const { campaign, counts, bestOffer } = view;
   const spec = campaign.spec;
@@ -39,6 +42,7 @@ export function CampaignLive({
     (r) => r.kind === "required",
   ).length;
   const eliminated = rows.filter((r) => r.cv.stage === "eliminated");
+  const qualified = rows.filter((r) => r.cv.stage === "qualified");
 
   const initials = rows
     .filter((r) => r.firstOffer)
@@ -48,106 +52,182 @@ export function CampaignLive({
       ? initials.reduce((a, b) => a + b, 0) / initials.length
       : null;
   const savings =
-    bestOffer && avgInitial ? Math.max(0, avgInitial - bestOffer.offer.estimatedTotal) : null;
+    bestOffer && avgInitial
+      ? Math.max(0, avgInitial - bestOffer.offer.estimatedTotal)
+      : null;
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold tracking-tight text-ink">
-              {campaign.title}
-            </h2>
-            <Badge tone="brand">{campaign.status}</Badge>
-          </div>
-          <div className="mt-0.5 text-[13px] text-ink-soft">
-            {spec?.location ?? campaign.location}
-            {spec?.targetDate ? ` · ${spec.targetDate}` : ""} · budget{" "}
-            <span className="tabular font-semibold">
-              {formatINR(campaign.targetBudget)}–{formatINR(campaign.hardBudget)}
-            </span>
-            {view.mailboxEmail && (
-              <span className="text-ink-faint"> · inbox {view.mailboxEmail}</span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {rows.some((r) => r.cv.stage === "selected") &&
-            campaign.status !== "closed" &&
-            onCloseCampaign && (
-              <button
-                onClick={onCloseCampaign}
-                className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-slate-50"
-              >
-                Close campaign →
-              </button>
-            )}
-          {onOpenCompare && (
-            <button
-              onClick={onOpenCompare}
-              className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-slate-50"
-            >
-              Compare offers →
-            </button>
-          )}
-        </div>
-      </div>
-
-      {savings !== null && savings > 0 && bestOffer && (
-        <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-4 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3"
-        >
-          <span className="text-xl">🎉</span>
-          <div className="text-sm text-emerald-900">
-            <span className="font-bold">
-              New best offer {formatINR(bestOffer.offer.estimatedTotal)}.
-            </span>{" "}
-            You've saved{" "}
-            <span className="tabular font-bold">
-              {formatINR(savings)}
-            </span>{" "}
-            against the average initial quote.
-          </div>
-        </motion.div>
-      )}
-
-      <div className="mt-4">
-        <Counters counts={counts} />
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
-        <div className="flex flex-col gap-4">
-          <Pipeline
-            rows={rows}
-            onOpenThread={onOpenThread}
-            onOpenVendor={onOpenVendor}
-            onSelectVendor={onSelectVendor}
-          />
-          {eliminated.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-surface px-4 py-2.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
-                {eliminated.length} rejected
-              </span>
-              {eliminated.map((r) => (
-                <button
-                  key={r.cv._id}
-                  onClick={() => r.vendor && onOpenVendor?.(r)}
-                  className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] text-ink-soft hover:bg-slate-200"
-                  title={r.cv.eliminationReason ?? undefined}
-                >
-                  <span className="font-semibold">{r.vendor?.name}</span>
-                  <span className="text-ink-faint">
-                    {r.cv.eliminationReason ?? "low fit"}
-                  </span>
-                </button>
-              ))}
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* Top bar: identity, money, and live counts on one horizontal line. */}
+      <header className="shrink-0 border-b border-line bg-surface">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="truncate text-[15px] font-semibold text-ink">
+                {campaign.title}
+              </h1>
+              <Badge tone={campaign.status === "closed" ? "neutral" : "brand"}>
+                {campaign.status}
+              </Badge>
             </div>
-          )}
-          <Leaderboard rows={rows} requiredCount={requiredCount} />
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[12px] text-ink-soft">
+              <span>{spec?.location ?? campaign.location}</span>
+              {spec?.targetDate && <span>{formatDate(spec.targetDate)}</span>}
+              <span>
+                budget{" "}
+                <Num className="text-ink">
+                  {formatINR(campaign.targetBudget)}–
+                  {formatINR(campaign.hardBudget)}
+                </Num>
+              </span>
+              {view.mailboxEmail && (
+                <span className="text-ink-faint">
+                  inbox <Num>{view.mailboxEmail}</Num>
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+            {onContactVendors && qualified.length > 0 && counts.contacted === 0 && (
+              <Button onClick={onContactVendors}>
+                Contact {qualified.length} vendors
+              </Button>
+            )}
+            {rows.some((r) => r.cv.stage === "selected") &&
+              campaign.status !== "closed" &&
+              onCloseCampaign && (
+                <Button variant="secondary" onClick={onCloseCampaign}>
+                  Close campaign
+                </Button>
+              )}
+            {onTab && (
+              <div className="flex items-center rounded-md border border-line p-0.5">
+                {(["live", "compare"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => onTab(t)}
+                    className={`rounded px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                      tab === t
+                        ? "bg-brand-soft text-brand"
+                        : "text-ink-soft hover:text-ink"
+                    }`}
+                  >
+                    {t === "live" ? "Board" : "Compare"}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        <div className="flex flex-col gap-4">
+
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-line-soft px-4 py-1">
+          <Counters counts={counts} />
+          {savings !== null && savings > 0 && bestOffer ? (
+            <motion.div
+              initial={{ opacity: 0, x: 8 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex items-center gap-2 text-[12px]"
+            >
+              <span className="text-ink-soft">
+                Best offer{" "}
+                <Num className="font-semibold text-money">
+                  {formatINR(bestOffer.offer.estimatedTotal)}
+                </Num>{" "}
+                from {bestOffer.vendorName}
+              </span>
+              <span className="h-3 w-px bg-line" />
+              <span className="text-money">
+                <Num className="font-semibold">{formatINR(savings)}</Num> under
+                the average opening quote
+              </span>
+            </motion.div>
+          ) : (
+            <span className="text-[12px] text-ink-faint">
+              Offers appear here as vendors reply.
+            </span>
+          )}
+        </div>
+      </header>
+
+      {/* Board: fluid centre, fixed tape on the right. Neither scrolls the page. */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <main className="flex min-w-0 flex-1 flex-col gap-2.5 p-2.5">
+          {tab === "compare" ? (
+            <Panel
+              title="Offers side by side"
+              className="min-h-0 flex-1"
+              scroll
+              bodyClassName="p-0"
+            >
+              {compare}
+            </Panel>
+          ) : (
+            <>
+              <Panel
+                title="Pipeline"
+                aside={
+                  eliminated.length > 0 ? (
+                    <span className="text-[12px] text-ink-faint">
+                      <Num>{eliminated.length}</Num> rejected
+                    </span>
+                  ) : undefined
+                }
+                className="shrink-0"
+                bodyClassName="p-2.5"
+              >
+                <Pipeline
+                  rows={rows}
+                  onOpenThread={onOpenThread}
+                  onOpenVendor={onOpenVendor}
+                  onSelectVendor={onSelectVendor}
+                />
+                {eliminated.length > 0 && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-line-soft pt-2.5">
+                    {eliminated.map((r) => (
+                      <button
+                        key={r.cv._id}
+                        onClick={() => r.vendor && onOpenVendor?.(r)}
+                        title={r.cv.eliminationReason ?? undefined}
+                        className="flex items-center gap-1.5 rounded border border-line px-2 py-0.5 text-[11px] text-ink-faint transition-colors hover:border-ink-faint hover:text-ink-soft"
+                      >
+                        <span className="font-medium line-through">
+                          {r.vendor?.name}
+                        </span>
+                        <span>{r.cv.eliminationReason ?? "low fit"}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </Panel>
+
+              <Panel
+                title="Quote board"
+                aside={
+                  bestOffer && (
+                    <span className="text-[12px] text-ink-soft">
+                      best{" "}
+                      <Num className="font-semibold text-money">
+                        {formatINR(bestOffer.offer.estimatedTotal)}
+                      </Num>
+                    </span>
+                  )
+                }
+                className="min-h-0 flex-1"
+                scroll
+                bodyClassName="p-0"
+              >
+                <Leaderboard
+                  rows={rows}
+                  requiredCount={requiredCount}
+                  onSelectVendor={onSelectVendor}
+                />
+              </Panel>
+            </>
+          )}
+        </main>
+
+        <aside className="flex w-[340px] shrink-0 flex-col gap-2.5 border-l border-line bg-canvas p-2.5">
           {onResolveApproval && (
             <Approvals
               approvals={view.approvals}
@@ -155,43 +235,45 @@ export function CampaignLive({
               onResolve={onResolveApproval}
             />
           )}
-          <ActivityFeed events={events} />
-          <div className="rounded-2xl border border-line bg-surface p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
-              Agent permissions
+
+          <Panel
+            title="Activity"
+            aside={<LiveDot />}
+            className="min-h-0 flex-1"
+            scroll
+            bodyClassName="p-1.5"
+          >
+            <ActivityFeed events={events} />
+          </Panel>
+
+          <Panel title="What the agent may do on its own" className="shrink-0">
+            <div className="divide-y divide-line-soft">
+              {[
+                ["Find vendors", "auto" as const],
+                ["Email vendors", campaign.permissions.outreach],
+                ["Ask follow-up questions", campaign.permissions.clarification],
+                ["Negotiate price", campaign.permissions.negotiation],
+                ["Accept the final offer", campaign.permissions.selection],
+              ].map(([label, mode]) => (
+                <div
+                  key={label as string}
+                  className="flex items-center justify-between px-3.5 py-1.5 text-[12px]"
+                >
+                  <span className="text-ink-soft">{label as string}</span>
+                  {mode === "auto" ? (
+                    <span className="font-mono text-[11px] text-money">
+                      on its own
+                    </span>
+                  ) : (
+                    <span className="font-mono text-[11px] text-brand">
+                      asks you
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
-            <div className="mt-2 space-y-1.5 text-[12px] text-ink-soft">
-              <div className="flex justify-between">
-                <span>Discovery</span>
-                <Badge tone="brand">AUTO</Badge>
-              </div>
-              <div className="flex justify-between">
-                <span>Vendor outreach</span>
-                <Badge tone={campaign.permissions.outreach === "auto" ? "brand" : "warn"}>
-                  {campaign.permissions.outreach.toUpperCase()}
-                </Badge>
-              </div>
-              <div className="flex justify-between">
-                <span>Clarification</span>
-                <Badge tone={campaign.permissions.clarification === "auto" ? "brand" : "warn"}>
-                  {campaign.permissions.clarification.toUpperCase()}
-                </Badge>
-              </div>
-              <div className="flex justify-between">
-                <span>Negotiation</span>
-                <Badge tone={campaign.permissions.negotiation === "auto" ? "brand" : "warn"}>
-                  {campaign.permissions.negotiation.toUpperCase()}
-                </Badge>
-              </div>
-              <div className="flex justify-between">
-                <span>Accept final offer</span>
-                <Badge tone="warn">
-                  {campaign.permissions.selection.toUpperCase()}
-                </Badge>
-              </div>
-            </div>
-          </div>
-        </div>
+          </Panel>
+        </aside>
       </div>
     </div>
   );

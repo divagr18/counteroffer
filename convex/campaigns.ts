@@ -21,7 +21,7 @@ async function getOrCreateDemoUser(ctx: MutationCtx): Promise<Doc<"users">> {
   if (existing) return existing;
   const id = await ctx.db.insert("users", {
     name: "Demo Buyer",
-    email: "demo@procurement.network",
+    email: "demo@counteroffer.app",
     createdAt: Date.now(),
   });
   return (await ctx.db.get(id))!;
@@ -306,6 +306,43 @@ export const startSourcing = mutation({
     await ctx.scheduler.runAfter(0, internal.agents.runDiscovery, {
       campaignId: args.campaignId,
     });
+  },
+});
+
+/**
+ * Start (or resume) vendor outreach for a campaign that already has qualified
+ * vendors. Surfaced as the "Contact vendors" button so a pre-qualified
+ * campaign can be driven entirely from the UI.
+ */
+export const contactVendors = mutation({
+  args: { campaignId: v.id("campaigns") },
+  handler: async (ctx, args) => {
+    const campaign = await ctx.db.get(args.campaignId);
+    if (!campaign) throw new Error("Campaign not found");
+    if (!campaign.spec) throw new Error("Confirm requirements first");
+
+    const qualified = await ctx.db
+      .query("campaignVendors")
+      .withIndex("by_campaign_stage", (q) =>
+        q.eq("campaignId", args.campaignId).eq("stage", "qualified"),
+      )
+      .collect();
+    if (qualified.length === 0) return { started: false, qualified: 0 };
+
+    await ctx.db.patch(args.campaignId, {
+      status: "active",
+      updatedAt: Date.now(),
+    });
+    await recordEvent(
+      ctx,
+      args.campaignId,
+      "outreach.started",
+      `Contacting ${qualified.length} qualified vendor${qualified.length === 1 ? "" : "s"}`,
+    );
+    await ctx.scheduler.runAfter(0, internal.agents.startOutreach, {
+      campaignId: args.campaignId,
+    });
+    return { started: true, qualified: qualified.length };
   },
 });
 

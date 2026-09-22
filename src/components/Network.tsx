@@ -1,6 +1,6 @@
 import type { NetworkEntry, UserMemory } from "../lib/types";
 import { formatDuration, formatINR, pct } from "../lib/format";
-import { Badge, Card, SectionLabel } from "./ui";
+import { Badge, Num, Panel } from "./ui";
 
 export function Network({
   entries,
@@ -14,18 +14,23 @@ export function Network({
   const categories = [...new Set(entries.map((e) => e.vendor.category))];
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6">
-      <Card className="p-5">
-        <SectionLabel>Your procurement memory</SectionLabel>
+    <div className="grid grid-cols-1 items-start gap-3 p-3 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <Panel
+        title="What it has learned about you"
+        bodyClassName="p-3.5"
+        className="xl:sticky xl:top-3"
+      >
         {!memory || memory.totalSelections === 0 ? (
-          <p className="mt-2 text-sm text-ink-soft">
-            Finish a campaign and select a vendor to start building your
-            private supplier intelligence.
+          <p className="text-[13px] text-ink-soft">
+            Finish a campaign and choose a vendor. From then on it knows how you
+            actually decide.
           </p>
         ) : (
-          <ul className="mt-2 space-y-1 text-sm text-ink-soft">
+          <ul className="flex flex-col gap-1.5 text-[13px] text-ink-soft">
             <li>
-              • You've selected vendors {memory.totalSelections}× across{" "}
+              You have chosen a vendor{" "}
+              <Num className="font-medium text-ink">{memory.totalSelections}</Num>{" "}
+              times, across{" "}
               {memory.categoryCounts
                 .map((c) => `${c.category} (${c.count})`)
                 .join(", ")}
@@ -33,97 +38,141 @@ export function Network({
             </li>
             {memory.nonCheapestSelections > 0 && (
               <li>
-                • In {memory.nonCheapestSelections} of {memory.totalSelections}{" "}
-                you picked a finalist that wasn't the cheapest — you trade
-                price for completeness.
+                In{" "}
+                <Num className="font-medium text-ink">
+                  {memory.nonCheapestSelections}
+                </Num>{" "}
+                of them you passed on the cheapest quote, so it weights a
+                complete quote over a low one.
               </li>
             )}
             {memory.medianSelectedResponseMs !== null && (
               <li>
-                • Your chosen vendors reply in a median of{" "}
-                {formatDuration(memory.medianSelectedResponseMs)}.
+                The vendors you pick reply in about{" "}
+                <Num className="font-medium text-ink">
+                  {formatDuration(memory.medianSelectedResponseMs)}
+                </Num>
+                .
               </li>
             )}
           </ul>
         )}
-      </Card>
+      </Panel>
 
-      <div className="mt-6">
-        <SectionLabel>Supplier network</SectionLabel>
-        {categories.map((cat) => (
-          <div key={cat} className="mt-4">
-            <div className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
-              {cat}
-            </div>
-            <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {entries
-                .filter((e) => e.vendor.category === cat)
-                .map((e) => (
-                  <Card key={e.vendor._id} className="p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <button
+      <div className="flex min-w-0 flex-col gap-3">
+      {entries.length === 0 ? (
+        <Panel title="Suppliers" bodyClassName="p-8">
+          <p className="text-center text-[13px] text-ink-faint">
+            No suppliers yet. Run a campaign and everyone it contacts lands here.
+          </p>
+        </Panel>
+      ) : (
+        categories.map((cat) => {
+          const inCategory = entries.filter((e) => e.vendor.category === cat);
+          return (
+            <Panel
+              key={cat}
+              title={<span className="first-letter:uppercase">{cat}</span>}
+              aside={
+                <span className="text-[11.5px] text-ink-faint">
+                  <Num>{inCategory.length}</Num> suppliers
+                </span>
+              }
+              bodyClassName="p-0"
+            >
+              <table className="w-full text-left text-[13px]">
+                <thead>
+                  <tr className="border-b border-line font-mono text-[11px] text-ink-faint">
+                    <th className="px-3.5 py-2 font-medium">Supplier</th>
+                    <th className="px-3 py-2 text-right font-medium">Replies</th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Usual reply time
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Opening → final
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">Movement</th>
+                    <th className="px-3 py-2 text-right font-medium">Chosen</th>
+                    <th className="px-3 py-2 text-right font-medium">Rating</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inCategory.map((e) => {
+                    const m = e.metrics;
+                    return (
+                      <tr
+                        key={e.vendor._id}
                         onClick={() => onOpenVendor?.(e.vendor._id)}
-                        className="min-w-0 truncate text-left text-sm font-semibold text-ink hover:text-brand hover:underline"
+                        className="cursor-pointer border-b border-line-soft last:border-0 hover:bg-soft"
                       >
-                        {e.vendor.name}
-                      </button>
-                      {e.vendor.isDemoVendor && <Badge>demo</Badge>}
-                    </div>
-                    {e.metrics ? (
-                      <div className="mt-3 space-y-1 text-[12px] text-ink-soft">
-                        <div className="flex justify-between">
-                          <span>Reply rate</span>
-                          <span className="tabular font-semibold text-ink">
-                            {pct(
-                              e.metrics.replies /
-                                Math.max(1, e.metrics.timesContacted),
+                        <td className="px-3.5 py-2.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-ink">
+                              {e.vendor.name}
+                            </span>
+                            {e.vendor.isDemoVendor && (
+                              <span className="font-mono text-[9px] text-ink-faint">
+                                demo
+                              </span>
                             )}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Median response</span>
-                          <span className="tabular font-semibold text-ink">
-                            {e.metrics.medianResponseMs !== undefined
-                              ? formatDuration(e.metrics.medianResponseMs)
+                            {!e.vendor.isDemoVendor && (
+                              <Badge tone="money">real</Badge>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <Num className="text-ink-soft">
+                            {m
+                              ? pct(m.replies / Math.max(1, m.timesContacted))
                               : "—"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Initial → final quote</span>
-                          <span className="tabular font-semibold text-ink">
-                            {e.metrics.medianInitialQuote !== undefined &&
-                            e.metrics.medianFinalQuote !== undefined
-                              ? `${formatINR(e.metrics.medianInitialQuote)} → ${formatINR(e.metrics.medianFinalQuote)}`
+                          </Num>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <Num className="text-ink-soft">
+                            {m?.medianResponseMs !== undefined
+                              ? formatDuration(m.medianResponseMs)
                               : "—"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Typical discount</span>
-                          <span className="tabular font-semibold text-money">
-                            {e.metrics.typicalDiscountPct !== undefined
-                              ? `${e.metrics.typicalDiscountPct}%`
+                          </Num>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          {m?.medianInitialQuote !== undefined &&
+                          m?.medianFinalQuote !== undefined ? (
+                            <Num className="text-ink">
+                              {formatINR(m.medianInitialQuote)} →{" "}
+                              {formatINR(m.medianFinalQuote)}
+                            </Num>
+                          ) : (
+                            <span className="text-ink-faint">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <Num className="font-medium text-money">
+                            {m?.typicalDiscountPct !== undefined
+                              ? `${m.typicalDiscountPct}%`
                               : "—"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Your rating</span>
-                          <span className="tabular font-semibold text-ink">
-                            {e.metrics.userRating !== undefined
-                              ? `${e.metrics.userRating}★`
+                          </Num>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <Num className="text-ink-soft">
+                            {m?.timesSelected ?? 0}
+                          </Num>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <Num className="text-ink-soft">
+                            {m?.userRating !== undefined
+                              ? m.userRating.toFixed(1)
                               : "—"}
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="mt-3 text-[12px] text-ink-faint">
-                        No interaction history yet.
-                      </p>
-                    )}
-                  </Card>
-                ))}
-            </div>
-          </div>
-        ))}
+                          </Num>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </Panel>
+          );
+        })
+      )}
       </div>
     </div>
   );

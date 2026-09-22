@@ -1,131 +1,173 @@
 import type { Message, Offer } from "../lib/types";
 import { formatClock, formatINR, pct } from "../lib/format";
-import { Card, SectionLabel } from "./ui";
+import { Meter, Num, Panel } from "./ui";
+
+const KIND_LABEL: Record<string, string> = {
+  rfq: "request for quote",
+  clarification: "follow-up question",
+  counteroffer: "counteroffer",
+  follow_up: "nudge",
+  quote: "quote",
+};
 
 export function Thread({
   vendorName,
   inboxEmail,
   messages,
   offer,
+  isDemoVendor = false,
 }: {
   vendorName: string;
   inboxEmail: string;
   messages: Message[];
   offer: Offer | null;
+  isDemoVendor?: boolean;
 }) {
   return (
-    <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-4 px-4 py-6 lg:grid-cols-[1fr_340px]">
-      <Card className="overflow-hidden">
-        <div className="border-b border-line px-4 py-3">
-          <div className="text-sm font-semibold">Thread with {vendorName}</div>
-          <div className="text-[11px] text-ink-faint">via {inboxEmail}</div>
-        </div>
-        <div className="flex flex-col gap-3 p-4">
-          {messages.map((message, i) => {
-            const outbound = message.direction === "outbound";
-            return (
-              <div
-                key={`${message._id ?? i}`}
-                className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                  outbound
-                    ? "self-end rounded-br-md bg-brand text-white"
-                    : "self-start rounded-bl-md bg-slate-100 text-ink"
-                }`}
-              >
-                <div
-                  className={`mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide ${
-                    outbound ? "text-teal-100" : "text-ink-faint"
-                  }`}
-                >
-                  <span>{outbound ? "Agent" : vendorName}</span>
-                  <span className="tabular font-normal normal-case">
-                    {formatClock(message.timestamp)}
+    <div className="grid grid-cols-1 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <Panel
+        title={`Emails with ${vendorName}`}
+        aside={
+          <span className="text-[11.5px] text-ink-faint">
+            {isDemoVendor ? (
+              "scripted vendor, real pipeline"
+            ) : (
+              <>
+                delivered to <Num>{inboxEmail}</Num>
+              </>
+            )}
+          </span>
+        }
+        bodyClassName="flex flex-col gap-2.5 p-3.5"
+      >
+        {messages.map((message, i) => {
+          const outbound = message.direction === "outbound";
+          return (
+            <article
+              key={`${message._id ?? i}`}
+              className={`max-w-[88%] rounded-md border px-3.5 py-2.5 ${
+                outbound
+                  ? "self-end border-brand/30 bg-brand-soft"
+                  : "self-start border-line bg-soft"
+              }`}
+            >
+              <header className="mb-1 flex flex-wrap items-baseline gap-x-2 text-[11px]">
+                <span className="font-medium text-ink">
+                  {outbound ? "The agent" : vendorName}
+                </span>
+                {message.kind && (
+                  <span className="text-ink-faint">
+                    {KIND_LABEL[message.kind] ?? message.kind}
                   </span>
-                  {message.kind && (
-                    <span
-                      className={`rounded-full px-1.5 py-px text-[9px] ${
-                        outbound ? "bg-teal-800/60" : "bg-slate-200"
-                      }`}
-                    >
-                      {message.kind}
-                    </span>
-                  )}
-                </div>
-                <div className="whitespace-pre-wrap text-[13px] leading-relaxed">
-                  {message.bodyText}
-                </div>
+                )}
+                <time className="tabular ml-auto text-ink-faint">
+                  {formatClock(message.timestamp)}
+                </time>
+              </header>
+              <div className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink-soft">
+                {message.bodyText}
               </div>
-            );
-          })}
-        </div>
-      </Card>
+            </article>
+          );
+        })}
+      </Panel>
 
-      <div className="flex flex-col gap-4">
-        <Card className="p-4">
-          <SectionLabel>Structured offer</SectionLabel>
+      <div className="flex flex-col gap-3">
+        <Panel
+          title="What the agent understood"
+          aside={
+            offer ? (
+              <span className="text-[11.5px] text-ink-faint">
+                revision <Num>{offer.revisionNumber}</Num>
+              </span>
+            ) : undefined
+          }
+          bodyClassName="p-3.5"
+        >
           {offer ? (
-            <div className="mt-3">
-              <div className="tabular text-2xl font-bold text-ink">
-                {formatINR(offer.estimatedTotal)}
+            <>
+              <div className="flex items-baseline gap-2">
+                <Num className="text-[26px] font-semibold leading-none text-ink">
+                  {formatINR(offer.estimatedTotal)}
+                </Num>
+                <span className="text-[11.5px] text-ink-faint">all in</span>
               </div>
-              <div className="text-[11px] text-ink-faint">
-                estimated all-in · revision {offer.revisionNumber}
-              </div>
-              <div className="mt-3 space-y-1.5 text-[13px]">
+
+              <dl className="mt-3.5 space-y-1.5 text-[12.5px]">
                 {offer.coverageHours !== undefined && (
-                  <RowLine label="Coverage" value={`${offer.coverageHours} hours`} ok />
+                  <Line
+                    label="Coverage"
+                    value={`${offer.coverageHours} hours`}
+                    ok
+                  />
                 )}
                 {offer.deliverables.map((d) => (
-                  <RowLine key={d} label={d} value="✓" ok />
+                  <Line key={d} label={d} value="included" ok />
                 ))}
-                <RowLine
+                <Line
                   label="Taxes"
                   value={offer.taxesIncluded ? "included" : "extra"}
                   ok={offer.taxesIncluded}
                 />
-                <RowLine
+                <Line
                   label="Travel"
                   value={
                     offer.travelIncluded === true
                       ? "included"
                       : offer.travelIncluded === false
-                        ? "extra"
-                        : "unknown"
+                        ? `extra ${formatINR(offer.travelAmount ?? 0)}`
+                        : "not stated"
                   }
                   ok={offer.travelIncluded === true}
                 />
+                {offer.deliveryTimelineDays !== undefined && (
+                  <Line
+                    label="Delivery"
+                    value={`${offer.deliveryTimelineDays} days`}
+                    ok
+                  />
+                )}
                 {offer.missingFields.map((m) => (
-                  <RowLine key={m} label={m} value="missing" ok={false} />
+                  <Line key={m} label={m} value="never answered" ok={false} />
                 ))}
-              </div>
-              <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
-                <span className="text-[11px] text-ink-soft">Completeness</span>
-                <span className="tabular text-[12px] font-bold text-brand">
-                  {pct(offer.completenessScore)}
+              </dl>
+
+              <div className="mt-3.5 flex items-center justify-between border-t border-line-soft pt-2.5">
+                <span className="text-[11.5px] text-ink-soft">
+                  How complete this quote is
                 </span>
+                <div className="flex items-center gap-2">
+                  <Meter value={offer.completenessScore} />
+                  <Num className="text-[11.5px] font-medium text-ink">
+                    {pct(offer.completenessScore)}
+                  </Num>
+                </div>
               </div>
+
               {offer.assumptions.length > 0 && (
-                <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                  {offer.assumptions.join(" · ")}
+                <div className="mt-2.5 rounded-md border border-warn/30 bg-warn-soft px-3 py-2 text-[11.5px] leading-relaxed text-warn">
+                  Assumed to compare fairly: {offer.assumptions.join("; ")}
                 </div>
               )}
-            </div>
+            </>
           ) : (
-            <div className="mt-3 text-[13px] text-ink-faint">
-              No structured offer extracted yet.
-            </div>
+            <p className="text-[12.5px] text-ink-faint">
+              No price in this thread yet.
+            </p>
           )}
-        </Card>
-        <div className="rounded-2xl border border-dashed border-line p-4 text-[11px] leading-relaxed text-ink-faint">
-          The left side is the raw email conversation. The right side is what the
-          agent understood from it — every number normalized and comparable.
-        </div>
+        </Panel>
+
+        <p className="px-1 text-[11.5px] leading-relaxed text-ink-faint">
+          On the left is the email exactly as it arrived. On the right is what the
+          agent pulled out of it, with every number converted to the same basis so
+          quotes can be compared.
+        </p>
       </div>
     </div>
   );
 }
 
-function RowLine({
+function Line({
   label,
   value,
   ok,
@@ -135,11 +177,9 @@ function RowLine({
   ok: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="capitalize text-ink-soft">{label}</span>
-      <span className={ok ? "font-semibold text-money" : "font-semibold text-warn"}>
-        {value}
-      </span>
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="text-ink-soft first-letter:uppercase">{label}</dt>
+      <dd className={ok ? "text-money" : "text-warn"}>{value}</dd>
     </div>
   );
 }

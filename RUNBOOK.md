@@ -1,19 +1,11 @@
-# Procurement Network — Runbook
+# Counteroffer — Runbook
 
-An autonomous buyer agent. Tell it what you need; it discovers vendors on the
-web (Firecrawl), emails them from its own inbox (AgentMail), parses and
-normalizes their replies (OpenAI), negotiates within your bounds, and shows it
-all live (Convex). Built for the Convex All Gas Hackathon.
-
-> Firecrawl observes the market. AgentMail interacts with it. OpenAI reasons
-> about it. Convex remembers it.
-
----
+Setup, local development, deployment, and verification.
 
 ## 1. Prerequisites
 
 - Node 20+ and npm
-- Accounts (all have free/hackathon tiers):
+- Provider accounts:
   - Convex — https://convex.dev
   - OpenAI — https://platform.openai.com (API key)
   - Firecrawl — https://firecrawl.dev (API key, `fc-...`)
@@ -22,7 +14,7 @@ all live (Convex). Built for the Convex All Gas Hackathon.
 ## 2. Install
 
 ```bash
-npm install
+npm ci
 ```
 
 ## 3. Create the Convex deployment + set secrets
@@ -41,102 +33,79 @@ npx convex env set AGENTMAIL_API_KEY "am_..."
 # npx convex env set OPENAI_MODEL_SMART "gpt-5.6-luna"
 ```
 
-`npx convex dev` also regenerates `convex/_generated/` (the committed copies are
-offline stubs so the project typechecks before a deployment exists).
+`npx convex dev` also regenerates `convex/_generated/` for your deployment.
 
-## 4. Run locally (live mode)
+## 4. Run locally (connected backend)
 
 ```bash
 npx convex dev      # terminal 1 — deploys functions + keeps them hot
 npm run dev         # terminal 2 — Vite on http://localhost:5173
 ```
 
-Because `.env.local` now contains `VITE_CONVEX_URL`, the app runs in **live
-mode** against your deployment. Without it, the app boots in **preview mode**
-(realistic seeded UI, no backend needed).
+With `VITE_CONVEX_URL`, the app connects to your Convex deployment. Without it,
+the app boots in preview mode with fixture data and no backend.
+
+The AgentMail integration supports live delivery and inbound replies. The demo
+uses `EMAIL_TRANSPORT=mock` to avoid emailing real people. For live delivery, set
+`EMAIL_TRANSPORT=live` and `AGENTMAIL_API_KEY` on your deployment; demo-marked
+vendors remain simulated. OpenAI and Firecrawl require their provider credentials.
+
+The public application has no authentication or tenant isolation. Use sample data.
+Store provider credentials only in Convex server-side environment variables; never
+put them in a `VITE_` variable or commit them.
 
 ## 5. Seed demo data
 
-Two seed actions are exposed as buttons on the home screen (and as mutations):
+Three seed mutations are exposed as buttons on the home screen:
 
-- **Seed demo campaign** → `seed.seedDemo`: a "started yesterday" campaign with
-  the full lifecycle (negotiated offers, activity history, vendor metrics). This
-  is the rich, story-complete campaign for the demo.
-- **Seed live demo** → `seed.seedInstantDemo`: a fresh campaign whose vendors are
+- **Wedding photographer** → `seed.seedDemo`: a "started yesterday" campaign with
+  the full lifecycle (negotiated offers, activity history, vendor metrics).
+- **Live pipeline** → `seed.seedInstantDemo`: a fresh campaign whose vendors are
   pre-qualified and ready to be contacted, so outreach + auto-replies happen live.
 
-Or from the CLI:
+- **Catering** → `seed.seedCateringDemo`: the second buying category.
+
+These buttons change the connected deployment. For a development deployment,
+you can also seed from the CLI:
 ```bash
 npx convex run seed:seedDemo
 npx convex run seed:seedInstantDemo
 ```
 
-## 6. Deploy
+## 6. Deploy to the selected hackathon host
+
+The frontend uses **Convex static hosting**. The component is
+already installed and registered in `convex/convex.config.ts`.
+
+Deploy:
 
 ```bash
-# Backend
-npx convex deploy
-
-# Frontend — Vercel or Netlify
-#   Build command:  npm run build
-#   Output dir:     dist
-#   Env var:        VITE_CONVEX_URL = your deployment's cloud URL
+npm run deploy
 ```
 
-Set `VITE_CONVEX_URL` in the hosting dashboard to the value from
-`npx convex url` (the `https://<deployment>.convex.cloud` URL).
+This runs the static-hosting deployment command configured in `package.json`.
+Verify the deployment target and provider configuration before running it. The
+frontend must connect to the matching `https://<deployment>.convex.cloud` backend.
+The published frontend uses `https://<deployment>.convex.site`.
 
-The AgentMail inbound webhook points at
-`https://<deployment>.convex.site/agentmail-webhook` and is registered
-automatically when a campaign inbox is created (`CONVEX_SITE_URL` is provided by
-Convex at runtime).
+After deployment, check the frontend, `/health`, and the full product workflow.
+The AgentMail inbound webhook uses `/agentmail-webhook` on the same site host;
+registration occurs when a live campaign inbox is created. Static hosting routes
+are registered last so the health and webhook routes retain precedence.
 
-## 7. Live demo script (under 3 minutes)
-
-1. **Problem + pitch (0:00–0:15).** "Normally I'd search dozens of vendors, fill
-   forms, wait for replies, and compare quotes by hand. Here I just tell it what
-   I need."
-2. **Create the request (0:15–0:35).** Type the wedding-photographer request on
-   the home screen. Show the interpreted-requirements review, click **Start
-   sourcing**.
-3. **Discovery (0:35–0:55).** Watch vendor cards fill the pipeline and the
-   activity feed tick. Point out a merged duplicate and the "rejected" reasons.
-4. **The rich campaign (0:55–1:25).** Open the seeded campaign. Show the counters,
-   the leaderboard (initial → current prices), and the savings banner.
-5. **Email intelligence (1:25–1:50).** Open a vendor thread. Raw email on the
-   left, normalized structured offer on the right. Emphasize it's doing more than
-   summarizing.
-6. **Negotiation (1:50–2:15).** Show a counteroffer in the thread and the price
-   drop on the card. Stress the hard budget is enforced by code, not by prompt.
-7. **The moat (2:15–2:35).** Open a vendor profile. Show reply rate, median
-   initial vs final quote, typical discount, and your rating. "Every campaign
-   makes the next one smarter."
-8. **Architecture (2:35–2:50).** One line per sponsor (the quote above).
-9. **Close (2:50–3:00).** "Make the market compete for you."
-
-Tip: keep the **live demo** campaign running in a tab while you present — its
-auto-replies keep landing in real time, so a reply can reorder the leaderboard
-mid-talk.
-
-## 8. Tests & type safety
+## 7. Tests & type safety
 
 ```bash
-npm test             # 34 unit tests over the deterministic core
+npm test             # unit tests and optional extraction tests
 npm run typecheck    # strict tsc across backend + frontend
 npm run build        # production build
 ```
 
-The deterministic core (quote normalization, offer scoring, the stage machine,
-and the negotiation clamp) is fully unit-tested against the doc's own examples.
+The unit suite covers quote normalization, scoring, state transitions, negotiation
+decisions, and ranking explanations. Set `OPENAI_API_KEY` in the test process
+to run the optional OpenAI extraction tests.
 
-## 9. Safety rails (what the agent will never do)
-
-- Exceed the hard budget (enforced in `lib/negotiate.ts`, not by prompt).
-- Fabricate a competing offer (only real leaderboard offers are referenced).
-- Accept a deal or make a payment (final selection requires user approval).
-- Claim facts not in evidence (extracted claims carry source URLs).
-
-## 10. Project map
+## 8. Project map
 
 ```
 convex/

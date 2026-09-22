@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { CampaignSpec, Requirement } from "../lib/types";
 import { formatDate, formatINR } from "../lib/format";
-import { Button, Card, SectionLabel } from "./ui";
+import { Button, Num, Panel } from "./ui";
 
 export function RequirementReview({
   title,
@@ -25,212 +25,203 @@ export function RequirementReview({
     s.hardBudget >= s.targetBudget &&
     s.requirements.every((r) => r.label.trim().length > 0);
 
+  const active = editing && draft ? draft : spec;
+
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-10">
-      <SectionLabel>Interpreted requirements</SectionLabel>
-      <h2 className="mt-1 text-2xl font-bold tracking-tight">{title}</h2>
-      <p className="mt-1 text-sm text-ink-soft">
-        {spec.location}
-        {spec.targetDate ? ` · ${formatDate(spec.targetDate)}` : ""}
-        {spec.quantity ? ` · ${spec.quantity} people` : ""}
+    <div className="mx-auto w-full max-w-5xl px-6 py-10">
+      <p className="text-[12px] text-ink-faint">
+        Read this back before anything is sent. Nothing leaves until you start.
       </p>
-
-      <Card className="mt-6 p-5">
-        <div className="flex items-start justify-between">
-          <SectionLabel>Budget</SectionLabel>
-          {onSave && !editing && (
-            <button
-              onClick={() => {
-                setDraft(JSON.parse(JSON.stringify(spec)) as CampaignSpec);
-                setEditing(true);
-              }}
-              className="text-[12px] font-semibold text-brand hover:underline"
-            >
-              Edit
-            </button>
-          )}
-        </div>
-        {editing && draft ? (
-          <div className="mt-3 flex flex-wrap items-end gap-6">
-            <label className="block">
-              <span className="text-[11px] uppercase tracking-wide text-ink-faint">
-                target
-              </span>
-              <input
-                type="number"
-                min={0}
-                value={draft.targetBudget}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    targetBudget: Number(e.target.value) || 0,
-                  })
-                }
-                className="tabular mt-1 block w-32 rounded-lg border border-line px-3 py-1.5 text-lg font-bold text-brand focus:border-brand focus:outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="text-[11px] uppercase tracking-wide text-ink-faint">
-                maximum
-              </span>
-              <input
-                type="number"
-                min={0}
-                value={draft.hardBudget}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    hardBudget: Number(e.target.value) || 0,
-                  })
-                }
-                className="tabular mt-1 block w-32 rounded-lg border border-line px-3 py-1.5 text-lg font-bold text-ink focus:border-brand focus:outline-none"
-              />
-            </label>
-            <div className="self-end pb-2 text-xs text-ink-faint">
-              {draft.budgetType === "per_person"
-                ? "per person"
-                : draft.budgetType}
-            </div>
-          </div>
-        ) : (
-          <div className="mt-2 flex items-center gap-8">
-            <div>
-              <div className="tabular text-2xl font-bold text-brand">
-                {formatINR(spec.targetBudget)}
-              </div>
-              <div className="text-[11px] uppercase tracking-wide text-ink-faint">
-                target
-              </div>
-            </div>
-            <div>
-              <div className="tabular text-2xl font-bold text-ink">
-                {formatINR(spec.hardBudget)}
-              </div>
-              <div className="text-[11px] uppercase tracking-wide text-ink-faint">
-                maximum
-              </div>
-            </div>
-            <div className="self-start pt-1.5 text-xs text-ink-faint">
-              {spec.budgetType === "per_person" ? "per person" : spec.budgetType}
-            </div>
-          </div>
+      <h1 className="mt-1.5 text-[26px] font-semibold tracking-[-0.015em] text-ink">
+        {title}
+      </h1>
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[13px] text-ink-soft">
+        <span>{active.location}</span>
+        {active.targetDate && <span>{formatDate(active.targetDate)}</span>}
+        {active.quantity && (
+          <span>
+            <Num>{active.quantity}</Num> people
+          </span>
         )}
-      </Card>
+      </div>
 
-      <Card className="mt-4 p-5">
-        <SectionLabel>Required</SectionLabel>
-        <ul className="mt-2 space-y-1.5">
-          {editing && draft
-            ? draft.requirements
-                .filter((r) => r.kind === "required")
-                .map((r) => (
-                  <RequirementRow
-                    key={r.id}
-                    requirement={r}
-                    onChange={(next) =>
-                      setDraft({
-                        ...draft,
-                        requirements: draft.requirements.map((x) =>
-                          x.id === next.id ? next : x,
-                        ),
-                      })
-                    }
-                    onRemove={() =>
-                      setDraft({
-                        ...draft,
-                        requirements: draft.requirements.filter(
-                          (x) => x.id !== r.id,
-                        ),
-                      })
-                    }
-                  />
-                ))
-            : required.map((r) => (
-                <li
-                  key={r.id}
-                  className="flex items-center gap-2 text-sm text-ink"
-                >
-                  <span className="text-money">✓</span> {r.label}
-                </li>
-              ))}
-        </ul>
-        {editing && draft ? (
-          <>
-            <div className="mt-4">
-              <SectionLabel>Preferred</SectionLabel>
-            </div>
-            <ul className="mt-2 space-y-1.5">
-              {draft.requirements
-                .filter((r) => r.kind === "preferred")
-                .map((r) => (
-                  <RequirementRow
-                    key={r.id}
-                    requirement={r}
-                    onChange={(next) =>
-                      setDraft({
-                        ...draft,
-                        requirements: draft.requirements.map((x) =>
-                          x.id === next.id ? next : x,
-                        ),
-                      })
-                    }
-                    onRemove={() =>
-                      setDraft({
-                        ...draft,
-                        requirements: draft.requirements.filter(
-                          (x) => x.id !== r.id,
-                        ),
-                      })
-                    }
-                  />
-                ))}
-            </ul>
-            <button
-              onClick={() =>
-                setDraft({
-                  ...draft,
-                  requirements: [
-                    ...draft.requirements,
-                    { id: crypto.randomUUID(), label: "", kind: "required" },
-                  ],
-                })
-              }
-              className="mt-3 text-[12px] font-semibold text-brand hover:underline"
-            >
-              + Add requirement
-            </button>
-            {!draftValid(draft) && (
-              <p className="mt-2 text-[12px] text-warn">
-                Maximum must be ≥ target and requirements need labels.
+      <div className="mt-6 grid grid-cols-1 gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <Panel
+          title="Budget"
+          aside={
+            onSave && !editing ? (
+              <button
+                onClick={() => {
+                  setDraft(JSON.parse(JSON.stringify(spec)) as CampaignSpec);
+                  setEditing(true);
+                }}
+                className="text-[12px] font-medium text-brand hover:underline"
+              >
+                Change
+              </button>
+            ) : undefined
+          }
+          bodyClassName="p-3.5"
+          className="self-start"
+        >
+          {editing && draft ? (
+            <div className="flex flex-col gap-3">
+              <label className="block">
+                <span className="text-[11.5px] text-ink-soft">
+                  What you hope to pay
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  value={draft.targetBudget}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      targetBudget: Number(e.target.value) || 0,
+                    })
+                  }
+                  className="tabular mt-1 block w-full rounded-md border border-line bg-surface px-3 py-1.5 text-[15px] font-semibold text-ink focus:border-brand focus:outline-none"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11.5px] text-ink-soft">
+                  The most you will pay
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  value={draft.hardBudget}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      hardBudget: Number(e.target.value) || 0,
+                    })
+                  }
+                  className="tabular mt-1 block w-full rounded-md border border-line bg-surface px-3 py-1.5 text-[15px] font-semibold text-ink focus:border-brand focus:outline-none"
+                />
+              </label>
+              <p className="text-[11.5px] text-ink-faint">
+                The agent never goes past the second number, and that limit is
+                enforced in code rather than asked of the model.
               </p>
-            )}
-          </>
-        ) : (
-          preferred.length > 0 && (
-            <>
-              <div className="mt-4">
-                <SectionLabel>Preferred</SectionLabel>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div>
+                <Num className="text-[22px] font-semibold text-ink">
+                  {formatINR(spec.targetBudget)}
+                </Num>
+                <div className="text-[11.5px] text-ink-faint">
+                  what you hope to pay
+                  {spec.budgetType === "per_person" ? ", per person" : ""}
+                </div>
               </div>
-              <ul className="mt-2 space-y-1.5">
-                {preferred.map((r) => (
-                  <li
+              <div>
+                <Num className="text-[22px] font-semibold text-brand">
+                  {formatINR(spec.hardBudget)}
+                </Num>
+                <div className="text-[11.5px] text-ink-faint">
+                  the most you will pay
+                </div>
+              </div>
+            </div>
+          )}
+        </Panel>
+
+        <Panel title="What it will insist on" bodyClassName="p-3.5">
+          {editing && draft ? (
+            <>
+              <ul className="flex flex-col gap-1.5">
+                {draft.requirements.map((r) => (
+                  <RequirementRow
                     key={r.id}
-                    className="flex items-center gap-2 text-sm text-ink-soft"
-                  >
-                    <span className="text-ink-faint">○</span> {r.label}
-                  </li>
+                    requirement={r}
+                    onChange={(next) =>
+                      setDraft({
+                        ...draft,
+                        requirements: draft.requirements.map((x) =>
+                          x.id === next.id ? next : x,
+                        ),
+                      })
+                    }
+                    onRemove={() =>
+                      setDraft({
+                        ...draft,
+                        requirements: draft.requirements.filter(
+                          (x) => x.id !== r.id,
+                        ),
+                      })
+                    }
+                  />
                 ))}
               </ul>
+              <button
+                onClick={() =>
+                  setDraft({
+                    ...draft,
+                    requirements: [
+                      ...draft.requirements,
+                      { id: crypto.randomUUID(), label: "", kind: "required" },
+                    ],
+                  })
+                }
+                className="mt-2.5 text-[12px] font-medium text-brand hover:underline"
+              >
+                Add something
+              </button>
+              {!draftValid(draft) && (
+                <p className="mt-2 text-[12px] text-warn">
+                  Give every line a name, and keep the maximum at or above what
+                  you hope to pay.
+                </p>
+              )}
             </>
-          )
-        )}
-      </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+              <div>
+                <div className="mb-1.5 text-[11.5px] text-ink-faint">
+                  Must have
+                </div>
+                <ul className="flex flex-col gap-1">
+                  {required.map((r) => (
+                    <li
+                      key={r.id}
+                      className="flex items-baseline gap-2 text-[13px] text-ink"
+                    >
+                      <span className="text-money">✓</span>
+                      {r.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {preferred.length > 0 && (
+                <div>
+                  <div className="mb-1.5 text-[11.5px] text-ink-faint">
+                    Nice to have
+                  </div>
+                  <ul className="flex flex-col gap-1">
+                    {preferred.map((r) => (
+                      <li
+                        key={r.id}
+                        className="flex items-baseline gap-2 text-[13px] text-ink-soft"
+                      >
+                        <span className="text-ink-faint">○</span>
+                        {r.label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </Panel>
+      </div>
 
-      <div className="mt-6 flex justify-end gap-2">
+      <div className="mt-4 flex items-center justify-end gap-2">
         {editing && draft ? (
           <>
             <Button variant="secondary" onClick={() => setEditing(false)}>
-              Cancel
+              Discard changes
             </Button>
             <Button
               disabled={!draftValid(draft)}
@@ -243,7 +234,7 @@ export function RequirementReview({
             </Button>
           </>
         ) : (
-          onStart && <Button onClick={onStart}>Start sourcing →</Button>
+          onStart && <Button onClick={onStart}>Start sourcing</Button>
         )}
       </div>
     </div>
@@ -260,12 +251,12 @@ function RequirementRow({
   onRemove: () => void;
 }) {
   return (
-    <li className="flex items-center gap-2">
+    <li className="flex items-center gap-1.5">
       <input
         value={requirement.label}
         onChange={(e) => onChange({ ...requirement, label: e.target.value })}
-        placeholder="Requirement"
-        className="flex-1 rounded-lg border border-line px-3 py-1.5 text-sm text-ink focus:border-brand focus:outline-none"
+        placeholder="What the vendor has to provide"
+        className="flex-1 rounded-md border border-line bg-surface px-3 py-1.5 text-[13px] text-ink focus:border-brand focus:outline-none"
       />
       <select
         value={requirement.kind}
@@ -275,17 +266,18 @@ function RequirementRow({
             kind: e.target.value as Requirement["kind"],
           })
         }
-        className="rounded-lg border border-line bg-surface px-2 py-1.5 text-[12px] text-ink-soft focus:border-brand focus:outline-none"
+        className="rounded-md border border-line bg-surface px-2 py-1.5 text-[12px] text-ink-soft focus:border-brand focus:outline-none"
       >
-        <option value="required">required</option>
-        <option value="preferred">preferred</option>
+        <option value="required">must have</option>
+        <option value="preferred">nice to have</option>
       </select>
       <button
         onClick={onRemove}
-        title="Remove requirement"
-        className="px-1 text-sm text-ink-faint hover:text-warn"
+        title="Remove"
+        aria-label="Remove requirement"
+        className="rounded px-1.5 py-1 text-[13px] text-ink-faint hover:bg-raise hover:text-danger"
       >
-        ×
+        ✕
       </button>
     </li>
   );

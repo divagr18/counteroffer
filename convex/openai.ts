@@ -23,7 +23,11 @@ export interface CompleteJsonOptions {
   user: string;
   schemaName: string;
   schema: JsonSchema;
-  /** Defaults to 0 (deterministic extraction). */
+  /**
+   * Sampling temperature. Reasoning models (including the gpt-5.x family)
+   * reject every value except the default and fail the request with HTTP 400,
+   * so this is only sent when `OPENAI_ALLOW_TEMPERATURE` is set.
+   */
   temperature?: number;
   maxTokens?: number;
 }
@@ -37,7 +41,6 @@ export async function completeJson<T>(opts: CompleteJsonOptions): Promise<T> {
 
   const body: Record<string, unknown> = {
     model: opts.model ?? fastModel(),
-    temperature: opts.temperature ?? 0,
     messages: [
       { role: "system", content: opts.system },
       { role: "user", content: opts.user },
@@ -52,6 +55,9 @@ export async function completeJson<T>(opts: CompleteJsonOptions): Promise<T> {
     },
   };
   if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens;
+  if (process.env.OPENAI_ALLOW_TEMPERATURE && opts.temperature !== undefined) {
+    body.temperature = opts.temperature;
+  }
 
   const res = await fetchWithRetry(
     OPENAI_URL,

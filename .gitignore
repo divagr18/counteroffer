@@ -10,3 +10,10 @@ omo-notepad-tmp
 .omo/
 .playwright-mcp/
 .codegraph/
+
+# Demo capture: raw Playwright takes and voice-clone working files are large
+# and regenerable. The finished video and the screenshots are kept.
+data/demo-recording/raw/
+data/demo-recording/cuts/
+data/demo-recording/concat.txt
+data/voice/

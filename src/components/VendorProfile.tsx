@@ -1,6 +1,6 @@
 import type { Evidence, Vendor, VendorMetrics } from "../lib/types";
 import { formatDuration, formatINR } from "../lib/format";
-import { Badge, Card, SectionLabel } from "./ui";
+import { Badge, Num, Panel } from "./ui";
 
 export function VendorProfile({
   vendor,
@@ -11,65 +11,119 @@ export function VendorProfile({
   metrics: VendorMetrics | null;
   evidence?: Evidence[];
 }) {
+  const replyRate =
+    metrics && metrics.timesContacted > 0
+      ? metrics.replies / metrics.timesContacted
+      : null;
+
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8">
-      <div className="flex items-start justify-between">
-        <div>
+    <div className="p-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-bold tracking-tight">{vendor.name}</h2>
-            {vendor.isDemoVendor && <Badge tone="neutral">demo vendor</Badge>}
+            <h1 className="text-[22px] font-semibold tracking-[-0.015em] text-ink">
+              {vendor.name}
+            </h1>
+            {vendor.isDemoVendor ? (
+              <Badge>scripted demo vendor</Badge>
+            ) : (
+              <Badge tone="money">real mailbox</Badge>
+            )}
           </div>
-          <div className="mt-1 text-sm text-ink-soft">
-            {vendor.website ?? "—"} · {vendor.locations.join(", ")}
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[12.5px] text-ink-soft">
+            {vendor.website && <span>{vendor.website}</span>}
+            {vendor.locations.length > 0 && (
+              <span>{vendor.locations.join(", ")}</span>
+            )}
           </div>
-          <div className="mt-1 text-[12px] text-ink-faint">
-            {vendor.services.join(" · ")}
-          </div>
+          {vendor.services.length > 0 && (
+            <div className="mt-1 text-[12px] text-ink-faint">
+              {vendor.services.join(" · ")}
+            </div>
+          )}
         </div>
-        {metrics?.userRating && (
-          <div className="rounded-2xl border border-line bg-surface px-4 py-2 text-center">
-            <div className="tabular text-xl font-bold text-amber-500">
-              {metrics.userRating.toFixed(1)}★
-            </div>
-            <div className="text-[10px] uppercase tracking-wide text-ink-faint">
-              your rating
-            </div>
+        {metrics?.userRating !== undefined && (
+          <div className="rounded-md border border-line px-3.5 py-2 text-center">
+            <Num className="text-[18px] font-semibold text-ink">
+              {metrics.userRating.toFixed(1)}
+            </Num>
+            <div className="text-[10.5px] text-ink-faint">your rating</div>
           </div>
         )}
       </div>
 
-      <Card className="mt-6 p-5">
-        <SectionLabel>Private supplier intelligence</SectionLabel>
-        <div className="mt-3 grid grid-cols-2 gap-4 md:grid-cols-3">
-          <Metric label="Campaigns seen" value={String(metrics?.campaignsSeen ?? 1)} />
-          <Metric label="Reply rate" value={metrics && metrics.timesContacted > 0 ? `${Math.round((metrics.replies / metrics.timesContacted) * 100)}%` : "—"} />
-          <Metric label="Median response" value={metrics?.medianResponseMs ? formatDuration(metrics.medianResponseMs) : "—"} />
-          <Metric label="Avg initial quote" value={metrics?.medianInitialQuote ? formatINR(metrics.medianInitialQuote) : "—"} />
-          <Metric label="Avg final quote" value={metrics?.medianFinalQuote ? formatINR(metrics.medianFinalQuote) : "—"} accent />
-          <Metric label="Typical discount" value={metrics?.typicalDiscountPct ? `${metrics.typicalDiscountPct.toFixed(1)}%` : "—"} accent />
-        </div>
-        <p className="mt-4 text-[12px] leading-relaxed text-ink-faint">
-          This history is compiled from every campaign where this vendor was
-          contacted. Future campaigns rank them using real quote behaviour, not
-          public marketing.
-        </p>
-      </Card>
+      <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <Panel title="How they have actually behaved" bodyClassName="p-3.5">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+            <Metric
+              label="campaigns seen"
+              value={String(metrics?.campaignsSeen ?? 1)}
+            />
+            <Metric
+              label="reply rate"
+              value={replyRate !== null ? `${Math.round(replyRate * 100)}%` : "—"}
+            />
+            <Metric
+              label="usual reply time"
+              value={
+                metrics?.medianResponseMs
+                  ? formatDuration(metrics.medianResponseMs)
+                  : "—"
+              }
+            />
+            <Metric
+              label="usual opening quote"
+              value={
+                metrics?.medianInitialQuote
+                  ? formatINR(metrics.medianInitialQuote)
+                  : "—"
+              }
+            />
+            <Metric
+              label="usual final quote"
+              value={
+                metrics?.medianFinalQuote
+                  ? formatINR(metrics.medianFinalQuote)
+                  : "—"
+              }
+              accent
+            />
+            <Metric
+              label="how far they move"
+              value={
+                metrics?.typicalDiscountPct
+                  ? `${metrics.typicalDiscountPct.toFixed(1)}%`
+                  : "—"
+              }
+              accent
+            />
+          </dl>
+          <p className="mt-3.5 border-t border-line-soft pt-2.5 text-[11.5px] leading-relaxed text-ink-faint">
+            Built from every campaign where this vendor was contacted. The next
+            campaign ranks them on this, not on their own marketing.
+          </p>
+        </Panel>
 
-      {evidence.length > 0 && (
-        <Card className="mt-4 p-5">
-          <SectionLabel>Evidence (from crawled pages)</SectionLabel>
-          <ul className="mt-3 space-y-2">
-            {evidence.map((ev, i) => (
-              <li key={i} className="rounded-xl bg-slate-50 px-3 py-2">
-                <div className="text-[13px] font-medium text-ink">{ev.claim}</div>
-                <div className="mt-0.5 truncate text-[11px] text-ink-faint">
-                  source: {ev.sourceUrl}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+        {evidence.length > 0 && (
+          <Panel title="Where these claims came from" bodyClassName="p-2.5" scroll>
+            <ul className="flex flex-col gap-1.5">
+              {evidence.map((ev, i) => (
+                <li key={i} className="rounded-md bg-soft px-3 py-2">
+                  <div className="text-[12.5px] text-ink">{ev.claim}</div>
+                  <a
+                    href={ev.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="mt-0.5 block truncate font-mono text-[10.5px] text-ink-faint hover:text-brand"
+                  >
+                    {ev.sourceUrl}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        )}
+      </div>
     </div>
   );
 }
@@ -85,10 +139,12 @@ function Metric({
 }) {
   return (
     <div>
-      <div className={`tabular text-lg font-bold ${accent ? "text-brand" : "text-ink"}`}>
+      <Num
+        className={`text-[16px] font-semibold ${accent ? "text-money" : "text-ink"}`}
+      >
         {value}
-      </div>
-      <div className="text-[11px] uppercase tracking-wide text-ink-faint">{label}</div>
+      </Num>
+      <div className="mt-0.5 text-[11px] text-ink-faint">{label}</div>
     </div>
   );
 }

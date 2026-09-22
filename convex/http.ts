@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
+import { registerStaticRoutes } from "@convex-dev/static-hosting";
 import { httpAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { base64ToBytes, bytesToBase64, safeEqual } from "./helpers";
 
 const http = httpRouter();
@@ -137,5 +138,11 @@ http.route({
     });
   }),
 });
+
+// The built frontend, served from this same deployment at
+// https://<deployment>.convex.site. Registered LAST: the exact routes above
+// (the AgentMail webhook and /health) win over the static catch-all, so the
+// webhook URL registered with AgentMail never moves.
+registerStaticRoutes(http, components.staticHosting);
 
 export default http;
